@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: docker/Dockerfile.cpu
+    container_name: trustlens-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+      - USE_MOCK=false
+      - MEMORY_PROFILE=8gb
+      - TAP=agent
+      - DEVICE=cpu
+      - ORT_THREADS=4
+      - DEMO_BYPASS_CONSENT=true
+      - ENV=demo
+    volumes:
+      - ./backend/cases:/app/cases
+      - ./backend/models:/app/models
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: trustlens-ui
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+      - VITE_USE_MOCK=false
+    depends_on:
+      - backend
+    restart: unless-stopped
