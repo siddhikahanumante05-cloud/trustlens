@@ -157,3 +157,55 @@ def test_fusion_with_missing_modalities():
     assert fusion_res.category in ("Authentic", "Suspicious")
     assert fusion_res.smoothed_probability < 0.60
     assert "spoof_max" in fusion_res.missing_features
+
+
+def test_m1_source_mobile_screen_replay_detection():
+    """Verify SourceLivenessModule flags mobile screen YouTube replay via specular reflection."""
+    inputs = make_dummy_inputs()
+    # Inject specular glass reflection patch across crops
+    for crop in inputs.face_crops:
+        crop[50:70, 50:70] = [252, 252, 254]
+        crop[::2, :, 0] = np.clip(crop[::2, :, 0].astype(int) + 30, 0, 255)
+        crop[1::2, :, 2] = np.clip(crop[1::2, :, 2].astype(int) + 30, 0, 255)
+
+    # Move landmarks to induce reflection decoupling
+    for i, lm in enumerate(inputs.landmarks_series):
+        lm[:, 0] = 0.5 + (i * 0.02)
+
+    m1 = SourceLivenessModule()
+    res = m1.run(inputs)
+    assert res.module_id == "M1_source"
+    assert res.features["replay_score"] >= 0.50
+    assert res.features["screen_glare"] >= 0.40
+    assert res.risk >= 0.50
+    replay_findings = [f for f in res.findings if "Mobile Screen" in f.title or "Screen Glass" in f.title]
+    assert len(replay_findings) > 0
+
+
+def test_fusion_hard_gate_screen_replay():
+    """Verify FusionEngine hard-gates to 'Likely deepfake' on mobile screen replay."""
+    engine = FusionEngine()
+    q_res = ModuleResult("Q_quality", "ok", 0.0, 1.0, {"quality_trust": 0.85})
+    m1_res = ModuleResult(
+        "M1_source",
+        "ok",
+        0.80,
+        0.95,
+        {
+            "source_risk": 0.10,
+            "replay_score": 0.75,
+            "screen_glare": 0.70,
+            "light_corr_face": 0.50,
+        },
+    )
+    m2_res = ModuleResult("M2_audio", "skipped", 0.0, 0.0, {})
+    m3_res = ModuleResult("M3_video", "ok", 0.10, 0.8, {"edge_logit": -1.0, "clip_logit": -0.8})
+    m4_res = ModuleResult("M4_geometry", "ok", 0.05, 0.8, {"landmark_jitter": 0.02})
+    m5_res = ModuleResult("M5_speech_lips", "skipped", 0.0, 0.0, {})
+
+    fusion_res = engine.fuse_modules([q_res, m1_res, m2_res, m3_res, m4_res, m5_res])
+    assert fusion_res.category == "Likely deepfake"
+    assert fusion_res.in_deepfake_state is True
+    assert fusion_res.check_states["source"] == "bad"
+    assert "Mobile screen replay detected" in (fusion_res.action_recommended or "")
+

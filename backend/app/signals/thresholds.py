@@ -63,3 +63,15 @@ QUALITY_TRUST_MIN = 0.30
 EDGENET_PROB_THRESHOLD = 0.70
 CLIP_PROB_THRESHOLD = 0.70
 VOICE_SPOOF_PROB_THRESHOLD = 0.60
+
+# ============================================================================
+# E9: Presentation Attack Detection & Screen Replay Thresholds
+# ============================================================================
+SCREEN_GLARE_THRESHOLD = 0.35
+REFLECTION_DECOUPLING_THRESHOLD = 0.35
+PLANAR_REFLECTION_THRESHOLD = 0.35
+MOIRE_SPIKE_THRESHOLD = 4.4
+CHROMA_LATTICE_RATIO_THRESHOLD = 0.28
+DEVICE_BEZEL_THRESHOLD = 0.40
+SCREEN_REPLAY_RISK_THRESHOLD = 0.65
+

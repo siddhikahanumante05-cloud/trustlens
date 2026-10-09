@@ -33,9 +33,32 @@ class ExplainEngine:
         """
         candidates: List[FindingEvent] = []
 
-        # 1. Source / Hardware provenance
+        # 1. Source / Hardware provenance & Mobile Screen Replay
         src_risk = features.get("source_risk", 0.0)
-        if src_risk >= 0.70:
+        replay_score = features.get("replay_score", 0.0)
+        screen_glare = features.get("screen_glare", 0.0)
+
+        if replay_score >= 0.60 or screen_glare >= 0.55:
+            candidates.append(
+                FindingEvent(
+                    id="source",
+                    severity="high",
+                    title="Mobile Screen Replay Detected",
+                    detail="Specular glass reflections, motion decoupling, and display artifacts indicate a video replay on a mobile screen to the webcam.",
+                    t=round(t_sec, 2),
+                )
+            )
+        elif replay_score >= 0.35 or screen_glare >= 0.35:
+            candidates.append(
+                FindingEvent(
+                    id="source",
+                    severity="medium",
+                    title="Screen Glass Reflection Glare",
+                    detail="Planar specular reflection highlights and subpixel artifacts observed over facial region.",
+                    t=round(t_sec, 2),
+                )
+            )
+        elif src_risk >= 0.70:
             candidates.append(
                 FindingEvent(
                     id="source",

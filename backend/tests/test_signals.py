@@ -24,6 +24,16 @@ from app.signals.phrase import (
 from app.signals.lip_closure import analyze_lip_closure
 from app.signals.sync import analyze_av_sync
 from app.signals.quality import evaluate_quality
+from app.signals.presentation import (
+    analyze_presentation_replay,
+    detect_specular_glass_glare,
+    detect_reflection_motion_decoupling,
+    detect_planar_reflection_uniformity,
+    compute_fft_moire_score,
+    compute_chroma_lattice_score,
+    detect_device_bezel,
+)
+
 
 
 # ============================================================================
@@ -455,3 +465,142 @@ def test_quality_face_missing():
     res = evaluate_quality(blur=100.0, brightness=120.0, face_ratio=0.0)
     assert "FACE_NOT_VISIBLE" in res.flags
     assert res.quality_trust < 0.60
+
+
+# ============================================================================
+# E9: Presentation Attack Detection & Mobile Screen Reflection Tests (>= 5 tests)
+# ============================================================================
+
+def test_presentation_live_in_person_authentic():
+    """Verify genuine live in-person human capture passes with low replay risk and no flags."""
+    # Natural 3D face crops with smooth organic gradients, no glass specular hotspots
+    crops = []
+    landmarks = []
+    for i in range(16):
+        # 160x160 synthetic genuine face with smooth organic lighting
+        y, x = np.ogrid[:160, :160]
+        # Soft Gaussian center highlight on nose/forehead that shifts with head movement
+        shift_x = int(np.sin(i * 0.4) * 4)
+        dist = np.sqrt((x - 80 - shift_x)**2 + (y - 80)**2)
+        face = np.clip(160.0 - dist * 0.8, 30.0, 195.0).astype(np.uint8)
+        crop_rgb = np.stack([face, np.clip(face * 0.85, 0, 255).astype(np.uint8), np.clip(face * 0.7, 0, 255).astype(np.uint8)], axis=-1)
+        crops.append(crop_rgb)
+
+        # Facial landmarks move in perfect lockstep with the highlight shift
+        lms = np.zeros((478, 3), dtype=np.float32)
+        lms[:, 0] = 0.5 + (shift_x / 160.0)
+        lms[:, 1] = 0.5
+        landmarks.append(lms)
+
+    res = analyze_presentation_replay(face_crops=crops, landmarks_series=landmarks)
+    assert res.replay_score < 0.25
+    assert res.glare_score < 0.25
+    assert res.decoupling_score < 0.20
+    assert "SCREEN_REPLAY_DETECTED" not in res.flags
+    assert "SPECULAR_SCREEN_GLARE" not in res.flags
+    assert "REFLECTION_MOTION_DECOUPLED" not in res.flags
+
+
+def test_presentation_mobile_screen_youtube_replay_detected():
+    """Verify YouTube video played on a mobile screen triggers screen reflection & replay flags."""
+    crops = []
+    landmarks = []
+    for i in range(16):
+        # Face inside video is moving / speaking (motion)
+        y, x = np.ogrid[:160, :160]
+        face_shift = int(np.sin(i * 0.5) * 8)
+        dist = np.sqrt((x - 80 - face_shift)**2 + (y - 80)**2)
+        base = np.clip(140.0 - dist * 0.6, 40.0, 180.0).astype(np.uint8)
+        crop_rgb = np.stack([base, (base * 0.8).astype(np.uint8), (base * 0.7).astype(np.uint8)], axis=-1)
+
+        # Mobile screen glass reflection: sharp, saturated specular glare hotspot at fixed screen location (110, 110)
+        # Glare stays stationary on the phone screen while face moves inside the video!
+        glare_y0, glare_y1 = 100, 120
+        glare_x0, glare_x1 = 100, 120
+        crop_rgb[glare_y0:glare_y1, glare_x0:glare_x1] = [252, 252, 254]
+
+        # Add subpixel OLED chrominance stripe artifact
+        crop_rgb[::2, :, 0] = np.clip(crop_rgb[::2, :, 0].astype(int) + 30, 0, 255)
+        crop_rgb[1::2, :, 2] = np.clip(crop_rgb[1::2, :, 2].astype(int) + 30, 0, 255)
+
+        crops.append(crop_rgb)
+
+        # Facial landmarks move with the video, but glass glare stays fixed at (110, 110)
+        lms = np.zeros((478, 3), dtype=np.float32)
+        lms[:, 0] = 0.5 + (face_shift / 160.0)
+        lms[:, 1] = 0.5
+        landmarks.append(lms)
+
+    res = analyze_presentation_replay(face_crops=crops, landmarks_series=landmarks)
+    assert res.replay_score >= 0.65
+    assert res.glare_score >= 0.50
+    assert res.decoupling_score >= 0.35
+    assert "SCREEN_REPLAY_DETECTED" in res.flags or "SPECULAR_SCREEN_GLARE" in res.flags
+
+
+def test_detect_specular_glass_glare():
+    """Verify sharp glass reflection is distinguished from soft organic skin."""
+    # 1. Glass reflection: saturated patch with sharp boundary
+    glass_crop = np.full((100, 100, 3), fill_value=120, dtype=np.uint8)
+    glass_crop[40:60, 40:60] = [254, 254, 254]
+    score_glass, stats_glass = detect_specular_glass_glare(glass_crop)
+    assert score_glass > 0.50
+    assert stats_glass["glare_ratio"] > 0.02
+    assert stats_glass["edge_sharpness"] > 20.0
+
+    # 2. Organic skin: soft gradient with no saturated clipped glare
+    skin_crop = np.zeros((100, 100, 3), dtype=np.uint8)
+    y, x = np.ogrid[:100, :100]
+    grad = np.clip(180 - np.sqrt((x - 50)**2 + (y - 50)**2) * 1.2, 50, 180).astype(np.uint8)
+    skin_crop[:, :, 0] = grad
+    skin_crop[:, :, 1] = (grad * 0.8).astype(np.uint8)
+    skin_crop[:, :, 2] = (grad * 0.7).astype(np.uint8)
+    score_skin, stats_skin = detect_specular_glass_glare(skin_crop)
+    assert score_skin < 0.20
+
+
+def test_detect_reflection_motion_decoupling():
+    """Verify decoupled motion between moving face and stationary glare."""
+    crops = []
+    landmarks = []
+    for i in range(8):
+        crop = np.full((120, 120, 3), fill_value=100, dtype=np.uint8)
+        # Glare centroid stays frozen at (30, 30)
+        crop[25:35, 25:35] = 250
+        crops.append(crop)
+
+        # Facial landmarks move significantly across frames
+        lms = np.zeros((478, 3), dtype=np.float32)
+        lms[:, 0] = 0.5 + (i * 0.03)
+        landmarks.append(lms)
+
+    decoupling, details = detect_reflection_motion_decoupling(crops, landmarks)
+    assert decoupling >= 0.40
+    assert details["mean_face_motion"] > 0.8
+    assert details["mean_glare_motion"] < 0.5
+
+
+def test_detect_planar_reflection_uniformity():
+    """Verify flat 2D planar reflection gradient on mobile screen produces high planar score."""
+    h, w = 120, 120
+    y, x = np.ogrid[:h, :w]
+    # Pure 2D planar gradient: L = 140 + 0.5*x + 0.3*y
+    planar_img = np.clip(140 + 0.5 * x + 0.3 * y, 0, 255).astype(np.uint8)
+    planar_rgb = np.stack([planar_img, planar_img, planar_img], axis=-1)
+
+    planar_score, stats = detect_planar_reflection_uniformity(planar_rgb)
+    assert stats["r2"] > 0.75
+    assert planar_score > 0.60
+
+
+def test_detect_device_bezel():
+    """Verify rectangular screen border detection framing the camera."""
+    frame = np.full((240, 320, 3), fill_value=30, dtype=np.uint8)
+    # Draw clear phone screen rectangle
+    frame = np.ascontiguousarray(frame)
+    import cv2
+    cv2.rectangle(frame, (30, 20), (290, 220), (255, 255, 255), 3)
+
+    bezel_score = detect_device_bezel(frame, face_bbox=(80, 50, 120, 140))
+    assert bezel_score >= 0.40
+

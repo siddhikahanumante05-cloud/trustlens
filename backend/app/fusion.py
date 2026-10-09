@@ -53,6 +53,11 @@ class WindowFeatures:
     # E8: Quality Trust
     quality_trust: Optional[float] = None
 
+    # E9: Presentation & Mobile Screen Replay
+    replay_score: Optional[float] = None
+    screen_glare: Optional[float] = None
+    reflection_decoupling: Optional[float] = None
+
 
 @dataclass
 class FusionResult:
@@ -150,11 +155,14 @@ class FusionEngine:
             "lips": "ok",
         }
 
-        # 1. Source / Provenance
+        # 1. Source / Provenance & Mobile Screen Replay
         src_risk = feat.get("source_risk", 0.0)
-        if src_risk > 0.50:
+        replay = feat.get("replay_score", 0.0)
+        glare = feat.get("screen_glare", 0.0)
+        effective_source_risk = max(src_risk, replay, glare * 0.9)
+        if effective_source_risk > 0.50:
             checks["source"] = "bad"
-        elif src_risk > 0.20:
+        elif effective_source_risk > 0.20:
             checks["source"] = "warn"
 
         # 2. Active Light Challenge
@@ -340,6 +348,9 @@ class FusionEngine:
             phrase_wer=aggregated_features.get("phrase_wer"),
             bilabial_aperture_err=aggregated_features.get("bilabial_aperture_err"),
             quality_trust=aggregated_features.get("quality_trust"),
+            replay_score=aggregated_features.get("replay_score"),
+            screen_glare=aggregated_features.get("screen_glare"),
+            reflection_decoupling=aggregated_features.get("reflection_decoupling"),
         )
 
         # Standard window processing
@@ -353,6 +364,18 @@ class FusionEngine:
                 res.in_deepfake_state = True
                 if not self._action_emitted:
                     res.action_recommended = "Hard gate triggered: Virtual camera with light modulation failure. Escalate for manual review."
+                    self._action_emitted = True
+
+            # Hard Gate 2: Mobile Screen Replay / Screen Glass Reflection Detected -> immediate Reject / Deepfake
+            replay = m1.features.get("replay_score", 0.0)
+            glare = m1.features.get("screen_glare", 0.0)
+            if replay >= 0.65 or (glare >= 0.60 and replay >= 0.45):
+                res.category = "Likely deepfake"
+                res.in_deepfake_state = True
+                res.smoothed_probability = max(res.smoothed_probability, 0.85)
+                res.calibrated_probability = max(res.calibrated_probability, 0.85)
+                if not self._action_emitted:
+                    res.action_recommended = "Mobile screen replay detected via glass reflection and display artifacts. Escalate for manual review."
                     self._action_emitted = True
 
         return res

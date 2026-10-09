@@ -1,6 +1,7 @@
 """M1: Source and Liveness Module.
 Answers: Is this stream coming from a live camera in front of this screen?
-Evaluates camera provenance metadata, timing jitter, and active screen illumination response.
+Evaluates camera provenance metadata, timing jitter, active screen illumination response,
+and presentation attack detection (specular screen glass reflections, motion decoupling, Moiré).
 """
 import time
 from typing import Set, List
@@ -10,6 +11,7 @@ from app.modules.base import ExpertModule, ModuleInputs, ModuleResult
 from app.schemas import FindingEvent
 from app.signals.provenance import analyze_provenance
 from app.signals.light import analyze_light_response
+from app.signals.presentation import analyze_presentation_replay
 
 
 class SourceLivenessModule(ExpertModule):
@@ -51,6 +53,13 @@ class SourceLivenessModule(ExpertModule):
             tap_mode=inputs.tap_mode,
         )
 
+        # 3. Presentation Attack / Mobile Screen Replay & Reflection Analysis
+        presentation_res = analyze_presentation_replay(
+            face_crops=inputs.face_crops,
+            frames=inputs.frames,
+            landmarks_series=inputs.landmarks_series,
+        )
+
         # Findings generation
         findings: List[FindingEvent] = []
         if prov_res.source_risk >= 0.70:
@@ -70,6 +79,27 @@ class SourceLivenessModule(ExpertModule):
                     severity="medium",
                     title="Suspicious Video Source Timing",
                     detail="Frame delivery jitter deviates from physical webcam hardware behavior.",
+                    t=round(inputs.t_sec, 2),
+                )
+            )
+
+        if presentation_res.replay_score >= 0.60 or presentation_res.glare_score >= 0.55:
+            findings.append(
+                FindingEvent(
+                    id="source",
+                    severity="high",
+                    title="Mobile Screen Replay Detected",
+                    detail="Specular glass reflections, motion decoupling, and display artifacts indicate a video replay on a mobile screen to the webcam.",
+                    t=round(inputs.t_sec, 2),
+                )
+            )
+        elif presentation_res.replay_score >= 0.35 or presentation_res.glare_score >= 0.35:
+            findings.append(
+                FindingEvent(
+                    id="source",
+                    severity="medium",
+                    title="Screen Glass Reflection Glare",
+                    detail="Planar specular reflection highlights and subpixel artifacts observed over facial region.",
                     t=round(inputs.t_sec, 2),
                 )
             )
@@ -96,15 +126,17 @@ class SourceLivenessModule(ExpertModule):
                     )
                 )
 
-        # Composite risk: provenance risk + light failure risk (if challenged)
+        # Composite risk: provenance risk + light failure risk (if challenged) + screen replay risk
         if challenge_seq and light_res.snr >= 1.5:
             light_risk = float(np.clip(1.0 - (light_res.corr_face + 0.2) / 1.0, 0.0, 1.0))
-            combined_risk = max(prov_res.source_risk, light_risk)
+            combined_risk = max(prov_res.source_risk, light_risk, presentation_res.replay_score)
             confidence = min(1.0, (light_res.snr / 3.0) * 0.9 + 0.1)
         else:
-            combined_risk = prov_res.source_risk
-            # When light challenge is not active, confidence depends on whether metadata was provided
-            confidence = 0.85 if camera_label or frame_intervals_ms else 0.50
+            combined_risk = max(prov_res.source_risk, presentation_res.replay_score)
+            if presentation_res.replay_score >= 0.50:
+                confidence = 0.90
+            else:
+                confidence = 0.85 if camera_label or frame_intervals_ms else 0.50
 
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -115,6 +147,13 @@ class SourceLivenessModule(ExpertModule):
             confidence=float(confidence),
             features={
                 "source_risk": prov_res.source_risk,
+                "replay_score": presentation_res.replay_score,
+                "screen_glare": presentation_res.glare_score,
+                "reflection_decoupling": presentation_res.decoupling_score,
+                "planar_reflection": presentation_res.planar_score,
+                "moire_score": presentation_res.moire_score,
+                "chroma_lattice_score": presentation_res.chroma_lattice_score,
+                "bezel_score": presentation_res.bezel_score,
                 "light_corr_face": light_res.corr_face,
                 "light_lag_ms": light_res.lag_ms,
                 "light_neck_face_ratio": light_res.neck_face_ratio,
@@ -126,3 +165,4 @@ class SourceLivenessModule(ExpertModule):
             model_version="1.0",
             latency_ms=latency_ms,
         )
+

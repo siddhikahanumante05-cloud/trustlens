@@ -22,7 +22,10 @@
     "sync_offset_ms": 0.004,
     "phrase_wer": 1.95,
     "bilabial_aperture_err": 2.60,
-    "quality_trust": -0.70
+    "quality_trust": -0.70,
+    "replay_score": 2.40,
+    "screen_glare": 1.60,
+    "reflection_decoupling": 1.50
   },
   "neutral_values": {
     "source_risk": 0.0,
@@ -44,6 +47,9 @@
     "sync_offset_ms": 0.0,
     "phrase_wer": 0.0,
     "bilabial_aperture_err": 0.0,
-    "quality_trust": 0.85
+    "quality_trust": 0.85,
+    "replay_score": 0.0,
+    "screen_glare": 0.0,
+    "reflection_decoupling": 0.0
   }
 }
