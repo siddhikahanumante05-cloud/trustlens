@@ -59,47 +59,12 @@ def benchmark_cpu_latency(onnx_path: str, dummy_input: Dict[str, np.ndarray], th
 def run_evaluation_suite():
     """Run simulated compression sweep and print benchmark comparison."""
     print("=" * 70)
-    print("TrustLens ML Model Benchmark & Quantization Report")
+    print("TrustLens ML Model Benchmark & Quantization Report (Targets)")
     print("=" * 70)
-
-    # Clean, Medium, Heavy degradation compression sweep metrics
-    metrics = {
-        "edgenet_fp32": {
-            "clean_auc": 0.942,
-            "medium_auc": 0.918,
-            "heavy_auc": 0.884,
-            "latency_p95_ms": 115.0,
-            "ram_mb": 42.0,
-        },
-        "edgenet_int8": {
-            "clean_auc": 0.938,  # Only -0.4% AUC drop
-            "medium_auc": 0.914,
-            "heavy_auc": 0.880,
-            "latency_p95_ms": 48.0,   # ~2.4x speedup
-            "ram_mb": 14.0,           # ~3x RAM reduction
-        },
-        "clip_sbi_int8": {
-            "clean_auc": 0.965,
-            "medium_auc": 0.941,
-            "heavy_auc": 0.906,
-            "latency_p95_ms": 185.0,
-            "ram_mb": 95.0,
-        },
-        "wavlm_head_int8": {
-            "clean_auc": 0.958,
-            "medium_auc": 0.932,
-            "heavy_auc": 0.895,
-            "latency_p95_ms": 32.0,
-            "ram_mb": 18.0,
-        },
-    }
-
-    print(f"{'Model':<18} | {'Clean AUC':<10} | {'Medium AUC':<10} | {'Heavy AUC':<10} | {'p95 Latency':<12} | {'RAM'}")
-    print("-" * 75)
-    for name, m in metrics.items():
-        print(f"{name:<18} | {m['clean_auc']:<10.3f} | {m['medium_auc']:<10.3f} | {m['heavy_auc']:<10.3f} | {m['latency_p95_ms']:<7.1f} ms | {m['ram_mb']:.1f} MB")
+    print("NOTE: Real metrics must be evaluated on the DFDC test partition and ASVspoof.")
+    print("Until weights are trained and exported, production accuracy is 'Not yet measured'.")
     print("=" * 70)
-    return metrics
+    return {"status": "not_yet_measured"}
 
 
 if __name__ == "__main__":

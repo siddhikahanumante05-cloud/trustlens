@@ -48,10 +48,10 @@ Evaluated on 4 intra-op CPU threads (`ORT_THREADS=4`):
 
 | Model | Weights Size (FP32 $\to$ INT8) | Clean AUC [95% CI] | Medium AUC [95% CI] | Heavy AUC [95% CI] | p95 Latency |
 |---|---|---|---|---|---|
-| **EdgeNet** | $42.0\text{ MB} \to 14.0\text{ MB}$ | $0.938\ [0.925, 0.951]$ | $0.914\ [0.898, 0.929]$ | $0.880\ [0.862, 0.897]$ | $48.0\text{ ms}$ |
-| **CLIP-LN + SBI** | $95.0\text{ MB} \to 28.5\text{ MB}$ | $0.965\ [0.954, 0.975]$ | $0.941\ [0.928, 0.953]$ | $0.906\ [0.891, 0.920]$ | $185.0\text{ ms}$ |
-| **WavLM Head** | $18.0\text{ MB} \to 5.5\text{ MB}$ | $0.958\ [0.946, 0.969]$ | $0.932\ [0.918, 0.945]$ | $0.895\ [0.878, 0.911]$ | $32.0\text{ ms}$ |
-| **E2 Active Light** | *Heuristic (0 params)* | $0.992\ [0.985, 0.998]$ | $0.981\ [0.970, 0.991]$ | $0.962\ [0.948, 0.975]$ | $< 5.0\text{ ms}$ |
+| **EdgeNet** | $42.0\text{ MB} \to 14.0\text{ MB}$ (target) | *Not yet measured (stub active)* | *Not yet measured* | *Not yet measured* | $\approx 48.0\text{ ms}$ |
+| **CLIP-LN + SBI** | $95.0\text{ MB} \to 28.5\text{ MB}$ (target) | *Not yet measured (stub active)* | *Not yet measured* | *Not yet measured* | $\approx 185.0\text{ ms}$ |
+| **WavLM Head** | $18.0\text{ MB} \to 5.5\text{ MB}$ (target) | *Not yet measured (stub active)* | *Not yet measured* | *Not yet measured* | $\approx 32.0\text{ ms}$ |
+| **E2 Active Light** | *Heuristic (0 params)* | *Awaiting TrustLens-Bench* | *Awaiting TrustLens-Bench* | *Awaiting TrustLens-Bench* | $< 5.0\text{ ms}$ |
 
 ---
 

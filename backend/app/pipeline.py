@@ -124,17 +124,20 @@ class LivePipeline:
         )
 
         # E6: Phrase & Bilabial Lip Closure
+        # Until Whisper is wired with real transcripts, M5 phrase check is skipped to avoid false alarms
         expected_phrase = ""
+        phrase_active = False
         if prep.challenges:
             for ch in prep.challenges:
                 if ch.get("kind") == "phrase":
                     expected_phrase = ch.get("expected", "")
+                    phrase_active = True
                     break
 
-        # Transcribed words stub or Whisper if available
         phrase_res = analyze_phrase_match(
             transcribed_words=[],
             expected_phrase=expected_phrase,
+            is_active=False,  # Skipped until Whisper is wired
         )
 
         lip_res = analyze_lip_closure(

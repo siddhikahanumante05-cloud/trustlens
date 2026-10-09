@@ -52,11 +52,23 @@ def compute_word_error_rate(reference: List[str], hypothesis: List[str]) -> floa
 def analyze_phrase_match(
     transcribed_words: List[Dict[str, Any]],
     expected_phrase: str,
+    is_active: bool = True,
 ) -> PhraseResult:
     """
     Evaluate speech-to-text transcription vs expected challenge phrase.
     Pure function, zero I/O.
     """
+    if not is_active or not expected_phrase.strip():
+        return PhraseResult(
+            phrase_wer=0.0,
+            matched=True,
+            expected_phrase=expected_phrase,
+            transcribed_text="",
+            word_timestamps=[],
+            flags=[],
+            details={"status": "skipped", "reason": "challenge_not_active"},
+        )
+
     ref_words = [w.strip() for w in expected_phrase.strip().split() if w.strip()]
     hyp_words = [w.get("word", "").strip() for w in transcribed_words if w.get("word")]
     transcribed_text = " ".join(hyp_words)
