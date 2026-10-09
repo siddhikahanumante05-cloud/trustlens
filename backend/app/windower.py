@@ -51,8 +51,8 @@ class Windower:
         raw_frames = self.decoder.get_latest_frames(WINDOW_FRAMES_TOTAL)
         raw_audio = self.decoder.get_latest_audio(WINDOW_AUDIO_SAMPLES)
 
-        # Warm-up check: First 3s have no full window
-        if len(raw_frames) < WINDOW_FRAMES_TOTAL or len(raw_audio) < WINDOW_AUDIO_SAMPLES:
+        # Warm-up check: First 3s require full video frames buffer
+        if len(raw_frames) < WINDOW_FRAMES_TOTAL:
             return None
 
         # Sample exactly 16 evenly spaced frames

@@ -61,7 +61,15 @@ export function startAnalysis({ stream, scenario, onEvent, consent = true, sessi
 function runBackend({ stream, onEvent, consent, sessionId }) {
   const wsUrl = sessionId ? `${CFG.ws}/ws/analyze?session_id=${sessionId}` : `${CFG.ws}/ws/analyze`
   const ws = new WebSocket(wsUrl)
-  let rec = null
+  const pendingMessages = []
+  const sendOrQueue = (msg) => {
+    const payload = typeof msg === 'string' ? msg : JSON.stringify(msg)
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(payload)
+    } else {
+      pendingMessages.push(payload)
+    }
+  }
 
   ws.onopen = () => {
     ws.send(JSON.stringify({
@@ -70,6 +78,11 @@ function runBackend({ stream, onEvent, consent, sessionId }) {
       consent: Boolean(consent),
       session_id: sessionId,
     }))
+
+    while (pendingMessages.length > 0) {
+      const msg = pendingMessages.shift()
+      ws.send(msg)
+    }
 
     if (stream && stream.getTracks().length > 0) {
       try {
@@ -106,14 +119,10 @@ function runBackend({ stream, onEvent, consent, sessionId }) {
       ws.close()
     },
     sendMeta: (meta) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'meta', ...meta }))
-      }
+      sendOrQueue({ type: 'meta', ...meta })
     },
     sendChallenge: (challenge) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'challenge', ...challenge }))
-      }
+      sendOrQueue({ type: 'challenge', ...challenge })
     },
   }
 }

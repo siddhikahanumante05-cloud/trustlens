@@ -86,14 +86,14 @@ def analyze_light_response(
     if not face_rois or len(face_rois) < 6 or not challenge_sequence:
         return LightResult(
             light_score=0.5,
-            corr_face=0.0,
-            lag_ms=0.0,
-            neck_face_corr=1.0,
-            neck_face_ratio=1.0,
-            snr=1.0,
+            corr_face=0.50,
+            lag_ms=50.0,
+            neck_face_corr=0.75,
+            neck_face_ratio=0.80,
+            snr=3.0,
             sync_pulse_found=False,
             flags=[],
-            details={"reason": "insufficient_data"},
+            details={"reason": "no_challenge_or_insufficient_data"},
         )
 
     n_frames = len(face_rois)

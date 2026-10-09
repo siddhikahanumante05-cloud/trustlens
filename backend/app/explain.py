@@ -86,7 +86,7 @@ class ExplainEngine:
         flicker = features.get("identity_flicker", 0.0)
         jitter = features.get("landmark_jitter", 0.0)
 
-        if edge_logit >= 1.2 or flicker >= 0.60:
+        if edge_logit >= 1.4 or flicker >= 0.60:
             candidates.append(
                 FindingEvent(
                     id="face",
@@ -96,7 +96,7 @@ class ExplainEngine:
                     t=round(t_sec, 2),
                 )
             )
-        elif edge_logit >= 0.60 or flicker >= 0.35 or jitter >= 0.07:
+        elif edge_logit >= 0.80 or flicker >= 0.35 or jitter >= 0.08:
             candidates.append(
                 FindingEvent(
                     id="face",
@@ -119,7 +119,7 @@ class ExplainEngine:
                     t=round(t_sec, 2),
                 )
             )
-        elif spoof_max >= 0.35:
+        elif spoof_max >= 0.40:
             candidates.append(
                 FindingEvent(
                     id="voice",

@@ -53,12 +53,16 @@ class VideoAppearanceModule(ExpertModule):
             quality_trust=quality_trust,
         )
 
-        # 2. Appearance identity stability across consecutive frames
-        face_embeddings = [np.mean(crop, axis=(0, 1)) for crop in crops]
+        # 2. Appearance identity stability across consecutive frames using spatial structure
+        import cv2
+        face_embeddings = [
+            cv2.resize(cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY), (16, 16)).flatten().astype(np.float32)
+            for crop in crops
+        ]
         sims = []
         for i in range(len(face_embeddings) - 1):
-            e1 = face_embeddings[i].flatten()
-            e2 = face_embeddings[i + 1].flatten()
+            e1 = face_embeddings[i]
+            e2 = face_embeddings[i + 1]
             norm1 = float(np.linalg.norm(e1))
             norm2 = float(np.linalg.norm(e2))
             if norm1 > 1e-6 and norm2 > 1e-6:
@@ -68,7 +72,7 @@ class VideoAppearanceModule(ExpertModule):
 
         # Findings generation
         findings: List[FindingEvent] = []
-        if model_out.edge_logit >= 1.2 or identity_flicker >= 0.50:
+        if model_out.edge_logit >= 1.4 or identity_flicker >= 0.50:
             findings.append(
                 FindingEvent(
                     id="face",
@@ -78,7 +82,7 @@ class VideoAppearanceModule(ExpertModule):
                     t=round(inputs.t_sec, 2),
                 )
             )
-        elif model_out.edge_logit >= 0.60 or identity_flicker >= 0.25:
+        elif model_out.edge_logit >= 0.80 or identity_flicker >= 0.35:
             findings.append(
                 FindingEvent(
                     id="face",
@@ -89,8 +93,8 @@ class VideoAppearanceModule(ExpertModule):
                 )
             )
 
-        # Map edge_logit to [0, 1] probability
-        prob = float(1.0 / (1.0 + np.exp(-np.clip(model_out.edge_logit, -5.0, 5.0))))
+        # Map edge_logit to [0, 1] probability (calibrated around decision boundary 1.5)
+        prob = float(1.0 / (1.0 + np.exp(-np.clip(model_out.edge_logit - 1.5, -5.0, 5.0))))
         risk = max(prob, identity_flicker * 1.2)
         risk = float(np.clip(risk, 0.0, 1.0))
 

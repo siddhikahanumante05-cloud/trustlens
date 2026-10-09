@@ -62,7 +62,7 @@ class LivePipeline:
 
         # Expert Modality Modules
         self.m1_module = SourceLivenessModule()
-        self.m2_module = AudioSpoofModule()
+        self.m2_module = AudioSpoofModule(runtime=self.runtime)
         self.m3_module = VideoAppearanceModule(runtime=self.runtime)
         self.m4_module = FaceGeometryModule()
         self.m5_module = SpeechLipModule()

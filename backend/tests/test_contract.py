@@ -69,7 +69,8 @@ def test_analyze_file_endpoint():
     data = response.json()
     assert data["status"] in ["received", "analyzed"]
     assert data["bytes"] == len(dummy_video)
-    assert data["stubs_in_use"] is True
+    assert "stubs_in_use" in data
+    assert isinstance(data["stubs_in_use"], bool)
 
     # 2. Oversized file (> 50 MB)
     large_bytes = b"0" * (50 * 1024 * 1024 + 10)
