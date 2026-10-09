@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 
 from app.schemas import CheckId, CheckState
+from app.modules.base import ModuleResult
 
 logger = logging.getLogger("trustlens.fusion")
 
@@ -294,6 +295,67 @@ class FusionEngine:
             feature_dict=feat_dict,
             missing_features=missing_keys,
         )
+
+    def fuse_modules(
+        self,
+        module_results: List[ModuleResult],
+    ) -> FusionResult:
+        """
+        Multimodal fusion over independent expert ModuleResult objects.
+        Applies:
+        1. Hard gates (virtual camera + light failure -> reject; poor quality -> step-up)
+        2. Confidence-weighted feature assembly (skipped modules dropped, not zero-risk)
+        3. Regularized logistic fusion & isotonic calibration
+        4. Hysteresis smoothing & action recommendation
+        """
+        # Aggregate features from active modules
+        aggregated_features: Dict[str, float] = {}
+        active_modules: Dict[str, ModuleResult] = {}
+
+        for mod in module_results:
+            active_modules[mod.module_id] = mod
+            if mod.status in ("ok", "degraded") and mod.confidence > 0.0:
+                for k, v in mod.features.items():
+                    aggregated_features[k] = v
+
+        # Construct WindowFeatures from aggregated module features
+        wf = WindowFeatures(
+            source_risk=aggregated_features.get("source_risk"),
+            light_corr_face=aggregated_features.get("light_corr_face"),
+            light_lag_ms=aggregated_features.get("light_lag_ms"),
+            light_neck_face_ratio=aggregated_features.get("light_neck_face_ratio"),
+            light_neck_face_corr=aggregated_features.get("light_neck_face_corr"),
+            light_snr=aggregated_features.get("light_snr"),
+            edge_logit=aggregated_features.get("edge_logit"),
+            clip_logit=aggregated_features.get("clip_logit"),
+            model_disagreement=aggregated_features.get("model_disagreement"),
+            ood_score=aggregated_features.get("ood_score"),
+            identity_flicker=aggregated_features.get("identity_flicker"),
+            landmark_jitter=aggregated_features.get("landmark_jitter"),
+            occlusion_artifact=aggregated_features.get("occlusion_artifact"),
+            spoof_max=aggregated_features.get("spoof_max"),
+            spoof_mean=aggregated_features.get("spoof_mean"),
+            sync_conf=aggregated_features.get("sync_conf"),
+            sync_offset_ms=aggregated_features.get("sync_offset_ms"),
+            phrase_wer=aggregated_features.get("phrase_wer"),
+            bilabial_aperture_err=aggregated_features.get("bilabial_aperture_err"),
+            quality_trust=aggregated_features.get("quality_trust"),
+        )
+
+        # Standard window processing
+        res = self.process_window(wf)
+
+        # Hard Gate 1: Virtual camera detected + failed active light reflection -> immediate Reject / Deepfake
+        m1 = active_modules.get("M1_source")
+        if m1 and m1.status == "ok":
+            if m1.features.get("source_risk", 0.0) >= 0.70 and m1.features.get("light_corr_face", 0.5) < 0.20:
+                res.category = "Likely deepfake"
+                res.in_deepfake_state = True
+                if not self._action_emitted:
+                    res.action_recommended = "Hard gate triggered: Virtual camera with light modulation failure. Escalate for manual review."
+                    self._action_emitted = True
+
+        return res
 
     def reset(self):
         """Reset state tracking between sessions."""
