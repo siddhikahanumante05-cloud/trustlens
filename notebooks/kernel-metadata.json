@@ -1,0 +1,16 @@
+{
+  "id": "thoratsoham/trustlens-dfdc-training-pipeline",
+  "title": "TrustLens DFDC Training Pipeline",
+  "code_file": "TrustLens_DFDC_Training_Pipeline.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [],
+  "competition_sources": [
+    "deepfake-detection-challenge"
+  ],
+  "kernel_sources": []
+}
