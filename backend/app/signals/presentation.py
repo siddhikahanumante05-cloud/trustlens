@@ -105,30 +105,43 @@ def detect_device_bezel(
 ) -> float:
     """
     Detects prominent rectangular device borders or screen bezels framing the face.
+    Requires a face bounding box to avoid mistaking normal room background edges
+    (doors, walls, furniture) for a mobile phone bezel.
     """
-    if frame is None or frame.size == 0:
+    if frame is None or frame.size == 0 or face_bbox is None:
         return 0.0
 
     h, w = frame.shape[:2]
     gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY) if len(frame.shape) == 3 else frame
 
-    # Look for high-contrast edges in margins
-    edges = cv2.Canny(gray, 60, 180)
+    bx, by, bw, bh = face_bbox
+    if bw < 20 or bh < 20:
+        return 0.0
 
-    # If face bbox provided, mask out interior face to only examine borders
-    if face_bbox:
-        bx, by, bw, bh = face_bbox
-        m_x0, m_x1 = max(0, bx + int(bw * 0.15)), min(w, bx + int(bw * 0.85))
-        m_y0, m_y1 = max(0, by + int(bh * 0.15)), min(h, by + int(bh * 0.85))
-        edges[m_y0:m_y1, m_x0:m_x1] = 0
+    # Define a localized search margin around the face (1.1x to 2.2x the face size)
+    pad_x = int(bw * 0.45)
+    pad_y = int(bh * 0.45)
+    x0, y0 = max(0, bx - pad_x), max(0, by - pad_y)
+    x1, y1 = min(w, bx + bw + pad_x), min(h, by + bh + pad_y)
+
+    roi = gray[y0:y1, x0:x1]
+    if roi.size == 0 or roi.shape[0] < 30 or roi.shape[1] < 30:
+        return 0.0
+
+    edges = cv2.Canny(roi, 60, 180)
+
+    # Zero out interior face region within the ROI
+    rel_bx0, rel_bx1 = max(0, bx - x0 + int(bw * 0.15)), min(roi.shape[1], bx - x0 + int(bw * 0.85))
+    rel_by0, rel_by1 = max(0, by - y0 + int(bh * 0.15)), min(roi.shape[0], by - y0 + int(bh * 0.85))
+    edges[rel_by0:rel_by1, rel_bx0:rel_bx1] = 0
 
     lines = cv2.HoughLinesP(
         edges,
         rho=1,
         theta=np.pi / 180,
-        threshold=45,
-        minLineLength=int(min(h, w) * 0.25),
-        maxLineGap=12,
+        threshold=40,
+        minLineLength=int(min(roi.shape[0], roi.shape[1]) * 0.35),
+        maxLineGap=10,
     )
 
     if lines is None:
@@ -136,23 +149,25 @@ def detect_device_bezel(
 
     h_lines = 0
     v_lines = 0
+    roi_w, roi_h = roi.shape[1], roi.shape[0]
+
     for line in lines:
         coords = line.ravel()
         if len(coords) < 4:
             continue
-        x1, y1, x2, y2 = int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3])
-        dx = abs(x2 - x1)
-        dy = abs(y2 - y1)
-        if dy < 6 and dx > int(w * 0.20):  # Horizontal line
+        lx1, ly1, lx2, ly2 = int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3])
+        dx = abs(lx2 - lx1)
+        dy = abs(ly2 - ly1)
+        if dy < 6 and dx > int(roi_w * 0.30):
             h_lines += 1
-        elif dx < 6 and dy > int(h * 0.20):  # Vertical line
+        elif dx < 6 and dy > int(roi_h * 0.30):
             v_lines += 1
 
-    # Device bezel signature: both horizontal and vertical screen edges framing camera
+    # Phone screen bezel requires both horizontal and vertical edges framing the face
     if h_lines >= 1 and v_lines >= 1:
         return float(min(1.0, 0.40 + 0.15 * (h_lines + v_lines)))
     elif h_lines >= 2 or v_lines >= 2:
-        return float(min(0.70, 0.25 + 0.10 * max(h_lines, v_lines)))
+        return float(min(0.65, 0.30 + 0.10 * max(h_lines, v_lines)))
 
     return 0.0
 
@@ -187,7 +202,8 @@ def detect_specular_glass_glare(crop_rgb: np.ndarray) -> Tuple[float, Dict[str, 
     glare_pixel_count = int(np.sum(glare_mask))
     glare_ratio = glare_pixel_count / total_pixels
 
-    if glare_pixel_count < 15:
+    # Real glass reflections create a distinct patch of at least 25 pixels
+    if glare_pixel_count < 25 or glare_ratio < 0.003:
         return 0.0, {
             "glare_ratio": round(glare_ratio, 4),
             "edge_sharpness": 0.0,
@@ -218,20 +234,27 @@ def detect_specular_glass_glare(crop_rgb: np.ndarray) -> Tuple[float, Dict[str, 
     else:
         contrast_ratio = 0.0
 
-    # Natural skin: glare_ratio <= 0.015, edge_sharpness <= 16.0, contrast_ratio <= 0.22
-    # Screen glass: glare_ratio >= 0.025, edge_sharpness >= 22.0, contrast_ratio >= 0.30
-    area_score = np.clip((glare_ratio - 0.015) / 0.06, 0.0, 1.0)
-    sharpness_score = np.clip((edge_sharpness - 15.0) / 25.0, 0.0, 1.0)
-    contrast_score = np.clip((contrast_ratio - 0.20) / 0.35, 0.0, 1.0)
+    # Real skin highlights have soft transitions (edge_sharpness < 18.0) and lower local contrast (< 0.25).
+    # Screen glass reflections have crisp boundaries (edge_sharpness >= 22.0) and high local contrast (>= 0.30).
+    if edge_sharpness < 18.0 or contrast_ratio < 0.25:
+        return 0.0, {
+            "glare_ratio": round(glare_ratio, 4),
+            "edge_sharpness": round(edge_sharpness, 2),
+            "contrast_ratio": round(contrast_ratio, 3),
+        }
+
+    area_score = np.clip((glare_ratio - 0.010) / 0.05, 0.0, 1.0)
+    sharpness_score = np.clip((edge_sharpness - 18.0) / 25.0, 0.0, 1.0)
+    contrast_score = np.clip((contrast_ratio - 0.25) / 0.35, 0.0, 1.0)
 
     glare_score = float(np.clip(
-        0.40 * sharpness_score + 0.35 * area_score + 0.25 * contrast_score,
+        0.45 * sharpness_score + 0.30 * area_score + 0.25 * contrast_score,
         0.0, 1.0
     ))
 
-    # Boost if both sharpness and contrast match glass reflection
-    if sharpness_score >= 0.45 and contrast_score >= 0.35:
-        glare_score = float(min(1.0, glare_score + 0.20))
+    # Boost if both sharpness and contrast firmly match glass reflection
+    if sharpness_score >= 0.40 and contrast_score >= 0.30:
+        glare_score = float(min(1.0, glare_score + 0.25))
 
     return glare_score, {
         "glare_ratio": round(glare_ratio, 4),
@@ -243,18 +266,14 @@ def detect_specular_glass_glare(crop_rgb: np.ndarray) -> Tuple[float, Dict[str, 
 def detect_reflection_motion_decoupling(
     crops_rgb: List[np.ndarray],
     landmarks_series: Optional[List[np.ndarray]] = None,
+    glare_present: bool = True,
 ) -> Tuple[float, Dict[str, Any]]:
     """
     Evaluates motion decoupling between facial movements and specular reflection glare.
-    On a live 3D head:
-      Highlights on skin rigidly move and deform in sync with 3D facial landmarks.
-    On a YouTube video played on a mobile phone:
-      The face in the video moves (speaking, nodding, tilting), but the reflections on the
-      mobile screen glass (from the room/caller) stay stationary on the screen plane or drift
-      due to the attacker's hand tremors, decoupled from facial movement.
+    Only evaluated if an actual specular glass glare patch is present on the screen.
     """
-    if not crops_rgb or len(crops_rgb) < 3:
-        return 0.0, {"reason": "insufficient_frames", "decoupling_score": 0.0}
+    if not glare_present or not crops_rgb or len(crops_rgb) < 3:
+        return 0.0, {"reason": "no_glare_or_insufficient_frames", "decoupling_score": 0.0}
 
     n = min(len(crops_rgb), 16)
     glare_centroids = []
@@ -264,12 +283,11 @@ def detect_reflection_motion_decoupling(
     for i in range(n):
         crop = crops_rgb[i]
         gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY) if len(crop.shape) == 3 else crop
-        # Specular candidate: top 5% brightest pixels or pixels >= 210
-        threshold_v = max(205, int(np.percentile(gray, 95)))
-        mask = (gray >= threshold_v).astype(np.uint8)
+        # Specular glass candidate: pixels >= 225
+        mask = (gray >= 225).astype(np.uint8)
         
         m = cv2.moments(mask)
-        if m["m00"] > 10:
+        if m["m00"] > 15:
             cx = m["m10"] / m["m00"]
             cy = m["m01"] / m["m00"]
             glare_centroids.append((cx, cy))
@@ -278,14 +296,19 @@ def detect_reflection_motion_decoupling(
 
     # Frame-to-frame glare displacements
     glare_displacements = []
+    valid_glare_pairs = 0
     for i in range(1, len(glare_centroids)):
         c0 = glare_centroids[i - 1]
         c1 = glare_centroids[i]
         if c0 is not None and c1 is not None:
             dist = np.sqrt((c1[0] - c0[0])**2 + (c1[1] - c0[1])**2)
             glare_displacements.append(float(dist))
+            valid_glare_pairs += 1
         else:
             glare_displacements.append(0.0)
+
+    if valid_glare_pairs < 2:
+        return 0.0, {"reason": "glare_not_persistent", "decoupling_score": 0.0}
 
     # Facial motion across frames
     if landmarks_series and len(landmarks_series) >= n:
@@ -308,9 +331,9 @@ def detect_reflection_motion_decoupling(
     mean_glare_motion = float(np.mean(glare_displacements)) if glare_displacements else 0.0
 
     decoupling_score = 0.0
-    # Case 1: Active face, static reflection on phone screen
+    # Case 1: Active face inside video, static reflection on mobile screen glass
     if mean_face_motion > 0.8 and mean_glare_motion < 0.6:
-        decoupling_score = float(np.clip((mean_face_motion - 0.8) / 2.5, 0.35, 0.95))
+        decoupling_score = float(np.clip((mean_face_motion - 0.8) / 2.5, 0.40, 0.95))
     elif len(face_motions) >= 4 and np.std(face_motions) > 0.1 and np.std(glare_displacements) > 0.1:
         # Trajectory correlation
         r = float(np.corrcoef(face_motions, glare_displacements)[0, 1])
@@ -324,32 +347,31 @@ def detect_reflection_motion_decoupling(
     }
 
 
-def detect_planar_reflection_uniformity(crop_rgb: np.ndarray) -> Tuple[float, Dict[str, float]]:
+def detect_planar_reflection_uniformity(
+    crop_rgb: np.ndarray,
+    glare_present: bool = True,
+) -> Tuple[float, Dict[str, float]]:
     """
-    Measures how closely the high-luminance reflection field conforms to a 2D plane (Z = 0).
-    A mobile phone screen is an optically flat 2D plane, so specular reflections and
-    ambient gradients adhere tightly to a first-order 2D planar polynomial:
-        L(x, y) = a*x + b*y + c
-    In contrast, a 3D human head has anatomical curves (protruding nose, eye cavities,
-    curved cheeks) which produce high non-planar residual variance.
+    Measures how closely the specular reflection field conforms to a 2D plane (Z = 0).
+    Only evaluated if actual specular glass glare is present.
     """
-    if crop_rgb is None or crop_rgb.size == 0 or crop_rgb.shape[0] < 24 or crop_rgb.shape[1] < 24:
+    if not glare_present or crop_rgb is None or crop_rgb.size == 0 or crop_rgb.shape[0] < 24 or crop_rgb.shape[1] < 24:
         return 0.0, {"r2": 0.0, "planar_score": 0.0}
 
     gray = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2GRAY) if len(crop_rgb.shape) == 3 else crop_rgb
     h, w = gray.shape
 
-    # Focus on upper luminance quartile (ambient lighting and highlights)
-    q75 = np.percentile(gray, 75)
-    y_coords, x_coords = np.where(gray >= q75)
+    # Focus on the highest luminance pixels in the reflection region
+    threshold = max(180, int(np.percentile(gray, 75)))
+    y_coords, x_coords = np.where(gray >= threshold)
 
-    if len(x_coords) < 50:
+    if len(x_coords) < 30:
         return 0.0, {"r2": 0.0, "planar_score": 0.0}
 
     vals = gray[y_coords, x_coords].astype(np.float64)
     var_total = float(np.var(vals))
     if var_total < 5.0:
-        return 0.0, {"r2": 0.0, "planar_score": 0.0}
+        return 0.50, {"r2": 1.0, "planar_score": 0.50}
 
     # Normalize coordinates to [-1, 1]
     norm_x = (x_coords - w / 2.0) / (w / 2.0)
@@ -362,9 +384,6 @@ def detect_planar_reflection_uniformity(crop_rgb: np.ndarray) -> Tuple[float, Di
     var_res = float(np.var(vals - pred))
 
     r2 = max(0.0, 1.0 - (var_res / (var_total + 1e-6)))
-
-    # On flat mobile screen glass, R^2 is typically >= 0.60
-    # On 3D curved face, R^2 is typically <= 0.35 due to facial contours
     planar_score = float(np.clip((r2 - 0.40) / 0.40, 0.0, 1.0))
 
     return planar_score, {
@@ -373,21 +392,21 @@ def detect_planar_reflection_uniformity(crop_rgb: np.ndarray) -> Tuple[float, Di
     }
 
 
-def detect_veiling_glare(crop_rgb: np.ndarray) -> Tuple[float, Dict[str, float]]:
+def detect_veiling_glare(
+    crop_rgb: np.ndarray,
+    glare_present: bool = False,
+) -> Tuple[float, Dict[str, float]]:
     """
     Detects veiling glare and dynamic range compression from light reflecting off display glass.
-    Mobile glass raises the black pedestal in shadowed facial areas (pupils, nostrils, neck),
-    while specular reflections compress upper dynamic range.
+    Only evaluated if specular glass glare is present.
     """
-    if crop_rgb is None or crop_rgb.size == 0:
+    if not glare_present or crop_rgb is None or crop_rgb.size == 0:
         return 0.0, {"black_level": 0.0, "veiling_score": 0.0}
 
     gray = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2GRAY) if len(crop_rgb.shape) == 3 else crop_rgb
     p5 = float(np.percentile(gray, 5))
     p95 = float(np.percentile(gray, 95))
 
-    # Real face under normal lighting has deep shadows: p5 is usually 10 - 30
-    # Under screen glass glare, ambient light reflects into camera raising p5 to 45 - 80
     elevated_pedestal = float(np.clip((p5 - 35.0) / 40.0, 0.0, 1.0))
     compressed_dynamic_range = float(np.clip((140.0 - (p95 - p5)) / 70.0, 0.0, 1.0))
 
@@ -408,14 +427,12 @@ def analyze_presentation_replay(
 ) -> PresentationResult:
     """
     Comprehensive multi-cue Presentation Attack Detection (PAD).
-    Evaluates:
-    - Specular glass reflections & glare hotspots on mobile screen glass
-    - Motion decoupling between facial movements in video and screen reflections
-    - Planar reflection field uniformity vs 3D facial curvature
-    - Veiling glare & black level compression
-    - 2D FFT Moiré spatial-frequency spikes across consecutive face crops
-    - Subpixel chrominance lattice edges
-    - Device screen bezels / rectangular borders in frames
+    Enforces PRIMARY EVIDENCE GATING:
+    - To flag a mobile screen replay, there MUST be direct physical evidence on the face:
+      1. Saturated specular glass glare with sharp boundary gradient and contrast (glare_score >= 0.35)
+      2. Display subpixel artifacts (2D FFT Moiré spike >= 0.40 or chroma lattice ratio >= 0.40)
+    - Normal indoor diffuse lighting on real human skin and background room edges (walls, doors)
+      will NEVER trigger a replay warning.
     """
     if not face_crops:
         return PresentationResult(
@@ -435,8 +452,6 @@ def analyze_presentation_replay(
     spikes = []
     chroma_ratios = []
     glares = []
-    planars = []
-    veilings = []
 
     for crop in face_crops[:16]:
         gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY) if len(crop.shape) == 3 else crop
@@ -445,31 +460,41 @@ def analyze_presentation_replay(
             chroma_ratios.append(compute_chroma_lattice_score(crop))
             g_score, _ = detect_specular_glass_glare(crop)
             glares.append(g_score)
-            p_score, _ = detect_planar_reflection_uniformity(crop)
-            planars.append(p_score)
-            v_score, _ = detect_veiling_glare(crop)
-            veilings.append(v_score)
 
     mean_spike = float(np.mean(spikes)) if spikes else 0.0
     mean_chroma = float(np.mean(chroma_ratios)) if chroma_ratios else 0.0
     max_glare = float(np.max(glares)) if glares else 0.0
     mean_glare = float(np.mean(glares)) if glares else 0.0
+
+    glare_is_present = (max_glare >= SCREEN_GLARE_THRESHOLD)
+
+    # 2. Conditional Reflection Cues (only evaluated if glass glare exists)
+    planars = []
+    veilings = []
+    for crop in face_crops[:16]:
+        if len(crop.shape) == 3:
+            p_score, _ = detect_planar_reflection_uniformity(crop, glare_present=glare_is_present)
+            planars.append(p_score)
+            v_score, _ = detect_veiling_glare(crop, glare_present=glare_is_present)
+            veilings.append(v_score)
+
     max_planar = float(np.max(planars)) if planars else 0.0
     mean_veiling = float(np.mean(veilings)) if veilings else 0.0
 
-    # 2. Reflection-to-Face Motion Decoupling
+    # Motion Decoupling (only evaluated if glass glare exists)
     decoupling_score, dec_details = detect_reflection_motion_decoupling(
         crops_rgb=face_crops[:16],
         landmarks_series=landmarks_series,
+        glare_present=glare_is_present,
     )
 
-    # 3. Bezel / Screen border evaluation
+    # 3. Bezel evaluation (requires face bounding box to avoid room edges)
     bezel_scores = []
-    if frames:
+    if frames and face_bboxes:
         n_frames = min(len(frames), 8)
         for i in range(n_frames):
             f = frames[i]
-            bbox = face_bboxes[i] if (face_bboxes and i < len(face_bboxes)) else None
+            bbox = face_bboxes[i] if i < len(face_bboxes) else None
             bezel_scores.append(detect_device_bezel(f, bbox))
     max_bezel = float(np.max(bezel_scores)) if bezel_scores else 0.0
 
@@ -477,9 +502,9 @@ def analyze_presentation_replay(
     moire_norm = float(np.clip((mean_spike - MOIRE_SPIKE_THRESHOLD) / 1.8, 0.0, 1.0))
     chroma_norm = float(np.clip((mean_chroma - CHROMA_LATTICE_RATIO_THRESHOLD) / 0.35, 0.0, 1.0))
     glare_norm = float(np.clip(max_glare, 0.0, 1.0))
-    planar_norm = float(np.clip(max_planar, 0.0, 1.0))
-    decoupling_norm = float(np.clip(decoupling_score, 0.0, 1.0))
-    bezel_norm = float(np.clip(max_bezel, 0.0, 1.0))
+    planar_norm = float(np.clip(max_planar, 0.0, 1.0)) if glare_is_present else 0.0
+    decoupling_norm = float(np.clip(decoupling_score, 0.0, 1.0)) if glare_is_present else 0.0
+    bezel_norm = float(np.clip(max_bezel, 0.0, 1.0)) if (glare_is_present or moire_norm >= 0.35 or chroma_norm >= 0.35) else 0.0
 
     flags = []
     if glare_norm >= SCREEN_GLARE_THRESHOLD:
@@ -495,27 +520,27 @@ def analyze_presentation_replay(
     if bezel_norm >= DEVICE_BEZEL_THRESHOLD:
         flags.append("DEVICE_BEZEL_DETECTED")
 
-    # 5. Composite Replay Score:
-    # Physical reflection cues on mobile screen
-    reflection_cue = max(glare_norm, decoupling_norm, planar_norm)
-    if glare_norm > 0.0 and (decoupling_norm > 0.0 or planar_norm > 0.0):
-        reflection_cue = float(np.clip(
-            0.50 * glare_norm + 0.35 * decoupling_norm + 0.25 * planar_norm + 0.15,
-            0.0, 1.0
+    # 5. Composite Replay Scoring with Strict Primary Evidence Gating
+    has_glass_reflection = (glare_norm >= SCREEN_GLARE_THRESHOLD)
+    has_subpixel_pattern = (moire_norm >= 0.40 or chroma_norm >= 0.40)
+
+    if not has_glass_reflection and not has_subpixel_pattern:
+        # Genuine 3D human in normal room lighting -> 0.0 (Authentic, NO false positives)
+        composite = 0.0
+    elif has_glass_reflection and (decoupling_norm >= REFLECTION_DECOUPLING_THRESHOLD or planar_norm >= PLANAR_REFLECTION_THRESHOLD or has_subpixel_pattern):
+        # Definite mobile screen replay: glass glare + motion decoupling / planar glass / Moiré
+        composite = float(np.clip(
+            0.50 * glare_norm + 0.30 * max(decoupling_norm, planar_norm) + 0.25 * max(moire_norm, chroma_norm) + 0.15,
+            0.65, 1.0
         ))
-
-    # Display physical artifacts (Moiré, subpixel stripes, screen bezel)
-    display_cue = max(moire_norm, chroma_norm, bezel_norm)
-
-    if reflection_cue >= 0.35:
-        if display_cue >= 0.30:
-            composite = float(np.clip(0.60 * reflection_cue + 0.40 * display_cue + 0.20, 0.0, 1.0))
-        else:
-            composite = float(np.clip(0.85 * reflection_cue + 0.15 * display_cue, 0.0, 1.0))
-    elif display_cue >= 0.35:
-        composite = float(np.clip(0.75 * display_cue + 0.25 * reflection_cue, 0.0, 1.0))
+    elif has_glass_reflection:
+        # Isolated glass glare on screen
+        composite = float(np.clip(glare_norm * 0.70, 0.0, 0.80))
+    elif has_subpixel_pattern:
+        # Screen subpixel lattice / Moiré pattern
+        composite = float(np.clip(max(moire_norm, chroma_norm) * 0.80, 0.0, 1.0))
     else:
-        composite = float(np.clip(max(reflection_cue, display_cue) * 0.5, 0.0, 1.0))
+        composite = 0.0
 
     if composite >= SCREEN_REPLAY_RISK_THRESHOLD:
         flags.append("SCREEN_REPLAY_DETECTED")
@@ -541,4 +566,5 @@ def analyze_presentation_replay(
             "mean_veiling": round(mean_veiling, 3),
         },
     )
+
 
