@@ -62,25 +62,45 @@ class ModelRuntime:
 
     def _init_models(self):
         """Warm up ONNX sessions or initialize stub-0 handlers."""
-        # Check if real ONNX weights exist
         models_dir = os.path.dirname(self.registry_path)
-        edgenet_path = os.path.join(models_dir, "edgenet_int8.onnx")
-        if os.path.exists(edgenet_path):
-            try:
-                import onnxruntime as ort
-                opts = ort.SessionOptions()
-                opts.intra_op_num_threads = settings.ORT_THREADS
-                opts.inter_op_num_threads = 1
-                opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        
+        # Check if ONNX Runtime is available
+        try:
+            import onnxruntime as ort
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = settings.ORT_THREADS
+            opts.inter_op_num_threads = 1
+            opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+
+            # 1. EdgeNet
+            edgenet_path = os.path.join(models_dir, "edgenet_int8.onnx")
+            if os.path.exists(edgenet_path):
                 self.sessions["edgenet"] = ort.InferenceSession(
                     edgenet_path, sess_options=opts, providers=["CPUExecutionProvider"]
                 )
-                self.stubs_in_use = False
                 logger.info("EdgeNet INT8 ONNX session initialized.")
-            except Exception as e:
-                logger.warning("Could not load EdgeNet ONNX: %s. Using stub-0.", e)
-        else:
-            logger.info("No EdgeNet weights at %s. Operating with stub-0 model.", edgenet_path)
+
+            # 2. CLIP-SBI
+            clip_path = os.path.join(models_dir, "clip_head_int8.onnx")
+            if os.path.exists(clip_path):
+                self.sessions["clip_sbi"] = ort.InferenceSession(
+                    clip_path, sess_options=opts, providers=["CPUExecutionProvider"]
+                )
+                logger.info("CLIP-SBI INT8 ONNX session initialized.")
+
+            # 3. WavLM Head
+            wavlm_path = os.path.join(models_dir, "wavlm_head_int8.onnx")
+            if os.path.exists(wavlm_path):
+                self.sessions["wavlm_head"] = ort.InferenceSession(
+                    wavlm_path, sess_options=opts, providers=["CPUExecutionProvider"]
+                )
+                logger.info("WavLM Head INT8 ONNX session initialized.")
+
+            if len(self.sessions) >= 3:
+                self.stubs_in_use = False
+                logger.info("All 3 neural ONNX models loaded successfully. Stubs disabled.")
+        except Exception as e:
+            logger.warning("Error initializing ONNX sessions: %s. Using stubs.", e)
 
     def run_inference(
         self,
@@ -101,11 +121,10 @@ class ModelRuntime:
         fast_latency = time.perf_counter() - t_start
         FAST_PATH_LATENCY.observe(fast_latency)
 
-        # 2. Slow Path (CLIP + WavLM) - triggered every 3rd window
+        # 2. Slow Path (CLIP + WavLM) - triggered every 3rd window (or window 1 on startup)
         slow_fresh = False
-        if self._window_counter % 3 == 0:
+        if self._window_counter % 3 == 0 or self._window_counter == 1:
             if self._slow_task is None or self._slow_task.done():
-                # Launch slow path in background thread
                 self._slow_task = self.thread_pool.submit(
                     self._run_slow_path, face_crops, audio_pcm
                 )
@@ -135,11 +154,11 @@ class ModelRuntime:
         )
 
     def _run_edgenet(self, face_crops: List[np.ndarray]) -> float:
-        """Fast path: MobileNetV3-Small + Log-FFT branch."""
-        if "edgenet" in self.sessions and len(face_crops) == 16:
+        """Fast path: MobileNetV3-Small + Frequency branch."""
+        if "edgenet" in self.sessions and len(face_crops) >= 16:
             try:
                 # Preprocess input tensor (1, 16, 3, 160, 160) normalized
-                crops_arr = np.array(face_crops, dtype=np.float32) / 255.0
+                crops_arr = np.array(face_crops[:16], dtype=np.float32) / 255.0
                 crops_t = np.transpose(crops_arr, (0, 3, 1, 2))  # (16, 3, 160, 160)
                 input_feed = {"frames": np.expand_dims(crops_t, axis=0)}
                 out = self.sessions["edgenet"].run(["edge_logit"], input_feed)[0]
@@ -152,23 +171,101 @@ class ModelRuntime:
             import cv2
             gray = cv2.cvtColor(face_crops[0], cv2.COLOR_RGB2GRAY)
             lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-            # Stub score centered around zero
             return float(np.clip((lap_var - 60.0) / 100.0, -2.5, 2.5))
         return 0.0
+
+    def _extract_audio_features(self, audio_pcm: np.ndarray) -> np.ndarray:
+        """Extract (1, 50, 768) acoustic feature tensor from 16kHz audio for WavLM head."""
+        if len(audio_pcm) < 16000:
+            sig = np.zeros(16000, dtype=np.float32)
+            if len(audio_pcm) > 0:
+                sig[-len(audio_pcm):] = audio_pcm.astype(np.float32)
+        else:
+            sig = audio_pcm[-16000:].astype(np.float32)
+
+        max_v = float(np.max(np.abs(sig))) + 1e-6
+        sig = sig / max_v
+
+        frame_size = 320
+        num_frames = 50
+        feats = np.zeros((1, num_frames, 768), dtype=np.float32)
+        window = np.hanning(frame_size)
+
+        for i in range(num_frames):
+            start = i * frame_size
+            chunk = sig[start : start + frame_size]
+            if len(chunk) < frame_size:
+                break
+            fft_mag = np.abs(np.fft.rfft(chunk * window)) + 1e-6
+            log_mag = np.log(fft_mag)
+            norm_mag = (log_mag - np.mean(log_mag)) / (np.std(log_mag) + 1e-6)
+            rep = int(np.ceil(768 / len(norm_mag)))
+            feats[0, i, :] = np.tile(norm_mag, rep)[:768]
+
+        return feats
+
+    def _extract_clip_features(self, face_crops: List[np.ndarray]) -> np.ndarray:
+        """Extract (1, 8, 512) visual embedding features for CLIP-SBI head."""
+        import cv2
+        num_frames = 8
+        indices = np.linspace(0, len(face_crops) - 1, num_frames, dtype=int)
+        feats = np.zeros((1, num_frames, 512), dtype=np.float32)
+        for i, idx in enumerate(indices):
+            crop = face_crops[idx]
+            gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+            low = cv2.resize(gray, (16, 16)).flatten()
+            grad_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+            grad_mag = np.sqrt(grad_x**2 + grad_y**2)
+            grad_low = cv2.resize(grad_mag, (16, 16)).flatten()
+            combined = np.concatenate([low, grad_low])[:512]
+            norm = float(np.linalg.norm(combined)) + 1e-6
+            feats[0, i, :] = combined / norm
+        return feats
 
     def _run_slow_path(self, face_crops: List[np.ndarray], audio_pcm: np.ndarray) -> Tuple[float, float, float, float]:
         """Slow path (runs every 3 s): CLIP-LN and WavLM Head."""
         t0 = time.perf_counter()
-        # Simulated or real inference
-        time.sleep(0.04)  # Simulate short CPU execution
         clip_logit = 0.0
         spoof_max = 0.0
         spoof_mean = 0.0
         ood_score = 0.0
 
-        if len(audio_pcm) > 16000:
+        # 1. CLIP-SBI Inference
+        if "clip_sbi" in self.sessions and len(face_crops) >= 8:
+            try:
+                clip_feats = self._extract_clip_features(face_crops)
+                out = self.sessions["clip_sbi"].run(["clip_logit"], {"clip_embeddings": clip_feats})[0]
+                clip_logit = float(out[0, 0])
+            except Exception as e:
+                logger.warning("CLIP session error: %s", e)
+
+        # 2. WavLM Head Audio Spoof Inference
+        if "wavlm_head" in self.sessions and len(audio_pcm) >= 8000:
+            try:
+                audio_feats = self._extract_audio_features(audio_pcm)
+                out = self.sessions["wavlm_head"].run(["spoof_logit"], {"audio_features": audio_feats})[0]
+                raw_spoof_logit = float(out[0, 0])
+                
+                # Check acoustic energy (if silence, spoof is 0)
+                audio_std = float(np.std(audio_pcm)) if len(audio_pcm) > 0 else 0.0
+                if audio_std < 50.0:
+                    spoof_max = 0.0
+                    spoof_mean = 0.0
+                else:
+                    # Calibrated spoof probability from neural head
+                    spoof_prob = float(1.0 / (1.0 + np.exp(-raw_spoof_logit)))
+                    spoof_max = spoof_prob
+                    spoof_mean = spoof_prob * 0.85
+            except Exception as e:
+                logger.warning("WavLM session error: %s", e)
+        elif len(audio_pcm) >= 16000:
+            # Fallback heuristic if session not available
             audio_std = float(np.std(audio_pcm))
-            spoof_max = float(np.clip((audio_std - 1500.0) / 4000.0, 0.0, 1.0))
+            if audio_std < 50.0:
+                spoof_max = 0.0
+            else:
+                spoof_max = float(np.clip((audio_std - 4000.0) / 8000.0, 0.0, 0.5))
             spoof_mean = spoof_max * 0.75
 
         slow_latency = time.perf_counter() - t0

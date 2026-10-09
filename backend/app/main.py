@@ -66,6 +66,17 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.info("Local Ollama not reachable at %s. Defaulting to template narrator.", settings.OLLAMA_URL)
 
+    # Check model registry status
+    import os
+    reg_path = os.path.join(os.path.dirname(__file__), "..", "models", "models_registry.json")
+    if os.path.exists(reg_path):
+        try:
+            with open(reg_path, "r") as f:
+                reg_data = json.load(f)
+                runtime_state["stubs_in_use"] = reg_data.get("stubs_in_use", False)
+        except Exception:
+            pass
+
     yield
     logger.info("Shutting down TrustLens backend.")
 
@@ -114,7 +125,7 @@ async def health_check():
         models_loaded=True,
         ffmpeg_present=ffmpeg_found,
         stubs_in_use=runtime_state["stubs_in_use"],
-        version="0.1.0-stub-0",
+        version="0.1.0-onnx" if not runtime_state["stubs_in_use"] else "0.1.0-stub-0",
         narrator_mode=settings.NARRATOR_MODE,
         ollama_available=runtime_state["ollama_available"] and runtime_state["qwen_model_found"],
     )

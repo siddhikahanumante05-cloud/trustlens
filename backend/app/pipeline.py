@@ -28,7 +28,7 @@ from app.schemas import (
 from app.signals.provenance import analyze_provenance
 from app.signals.light import analyze_light_response
 from app.signals.identity import analyze_identity_consistency
-from app.signals.phrase import analyze_phrase_match
+from app.signals.phrase import analyze_phrase_match, transcribe_audio_pcm
 from app.signals.lip_closure import analyze_lip_closure
 from app.signals.sync import analyze_av_sync
 from app.signals.quality import evaluate_quality
@@ -131,9 +131,13 @@ class LivePipeline:
                     expected_phrase = ch.get("expected", "")
                     break
 
-        # Transcribed words stub or Whisper if available
+        # Transcribe words using Whisper when challenge is active or speech detected
+        transcribed_words = []
+        if expected_phrase or (prep.audio is not None and len(prep.audio) >= 8000 and float(np.std(prep.audio)) > 150.0):
+            transcribed_words = transcribe_audio_pcm(prep.audio)
+
         phrase_res = analyze_phrase_match(
-            transcribed_words=[],
+            transcribed_words=transcribed_words,
             expected_phrase=expected_phrase,
         )
 

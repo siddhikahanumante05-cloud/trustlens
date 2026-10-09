@@ -90,3 +90,44 @@ def analyze_phrase_match(
             "wer": wer,
         },
     )
+
+
+_whisper_model = None
+
+
+def get_whisper_model():
+    """Retrieve or lazily initialize cached Whisper tiny model."""
+    global _whisper_model
+    if _whisper_model is None:
+        try:
+            import whisper
+            _whisper_model = whisper.load_model("tiny")
+        except Exception:
+            return None
+    return _whisper_model
+
+
+def transcribe_audio_pcm(audio_pcm: Any) -> List[Dict[str, Any]]:
+    """Transcribe 16kHz s16le PCM audio using cached Whisper tiny model."""
+    import numpy as np
+    if audio_pcm is None or len(audio_pcm) < 8000:
+        return []
+    if float(np.std(audio_pcm)) < 60.0:
+        return []
+    model = get_whisper_model()
+    if model is None:
+        return []
+    try:
+        audio_f32 = audio_pcm.astype(np.float32) / 32768.0
+        res = model.transcribe(audio_f32, word_timestamps=True, fp16=False)
+        words: List[Dict[str, Any]] = []
+        for segment in res.get("segments", []):
+            for w in segment.get("words", []):
+                words.append({
+                    "word": w.get("word", "").strip(),
+                    "start": float(w.get("start", 0.0)),
+                    "end": float(w.get("end", 0.0)),
+                })
+        return words
+    except Exception:
+        return []

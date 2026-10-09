@@ -111,6 +111,7 @@ def test_explain_heatmap_generation():
 
 def test_narrator_summary_and_validation():
     narrator = NarratorEngine()
+    narrator.mode = "template"
     findings = [
         FindingEvent(
             type="finding",
@@ -130,7 +131,7 @@ def test_narrator_summary_and_validation():
     assert "82%" in summary
     assert "Likely deepfake" in summary
     assert "Deepfake Boundary Artifacts" in summary
-    assert not ai_gen  # Fallback template used when Ollama not active
+    assert not ai_gen
 
 
 def test_case_store_save_load_and_cleanup():

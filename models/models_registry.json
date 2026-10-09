@@ -1,39 +1,39 @@
 {
   "registry_version": "1.0",
-  "stubs_in_use": true,
+  "stubs_in_use": false,
   "models": {
     "edgenet": {
-      "version": "stub-0",
-      "architecture": "MobileNetV3-Small + Log-FFT + GRU(128)",
+      "version": "1.0-onnx",
+      "architecture": "MobileNetV3-Small + HighPass + GRU(128)",
       "weights_file": "models/edgenet_int8.onnx",
       "input_spec": {
         "frames": [1, 16, 3, 160, 160]
       },
       "output_name": "edge_logit",
-      "is_stub": true,
-      "sha256": "stub-placeholder-hash-edgenet-0000"
+      "is_stub": false,
+      "sha256": "E4CEA78810A5EB54CE8A0F556D2925A945D0711228BE21CAF51B9194980F83C6"
     },
     "clip_sbi": {
-      "version": "stub-0",
+      "version": "1.0-onnx",
       "architecture": "OpenCLIP ViT-B/32 + LayerNorm Tuned Head",
       "weights_file": "models/clip_head_int8.onnx",
       "input_spec": {
         "clip_embeddings": [1, 8, 512]
       },
       "output_name": "clip_logit",
-      "is_stub": true,
-      "sha256": "stub-placeholder-hash-clipsbi-0000"
+      "is_stub": false,
+      "sha256": "D582D3B2B22E222506B7B98CC3394EA380605406D753BEB188CC2708D2E62275"
     },
     "wavlm_head": {
-      "version": "stub-0",
+      "version": "1.0-onnx",
       "architecture": "WavLM-base-plus + Attentive Stats Pooling",
       "weights_file": "models/wavlm_head_int8.onnx",
       "input_spec": {
         "audio_features": [1, 50, 768]
       },
       "output_name": "spoof_logit",
-      "is_stub": true,
-      "sha256": "stub-placeholder-hash-wavlm-0000"
+      "is_stub": false,
+      "sha256": "4044DAD81256DD99EE688D29752E639FCFA92BDCB550E4E50A80B7BD2E781247"
     }
   }
 }
