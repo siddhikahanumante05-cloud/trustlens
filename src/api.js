@@ -1,8 +1,8 @@
 // ---------- Backend API & WebSocket Client ----------
 export const CFG = {
   mock: import.meta.env.VITE_USE_MOCK === 'true',
-  api: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-  ws: import.meta.env.VITE_WS_URL || 'ws://localhost:8000',
+  api: import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000` : 'http://localhost:8000'),
+  ws: import.meta.env.VITE_WS_URL || (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8000` : 'ws://localhost:8000'),
 }
 
 export const CHECKS = [
