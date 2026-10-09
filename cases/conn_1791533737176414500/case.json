@@ -1,0 +1,160 @@
+{
+  "session_id": "conn_1791533737176414500",
+  "created_at": 1791533763,
+  "consent_status": "consented",
+  "stubs_in_use": true,
+  "risk_score": 0.9634,
+  "category": "Likely deepfake",
+  "findings": [
+    {
+      "type": "finding",
+      "id": "face",
+      "severity": "high",
+      "title": "Deepfake Boundary Artifacts",
+      "detail": "High-frequency frequency-domain blending seams and temporal embedding flicker detected.",
+      "t": 1791533740.48
+    }
+  ],
+  "summary": "Verification session completed with an assessed deepfake risk of 96% (Likely deepfake). Primary anomalies observed include 'Deepfake Boundary Artifacts' across active analysis windows. Recommendation: Escalate for manual analyst review or issue a secondary physical head-turn challenge.",
+  "ai_generated_summary": false,
+  "window_count": 9,
+  "evidence_files": [
+    "heatmap_w001.jpg",
+    "heatmap_w002.jpg",
+    "heatmap_w003.jpg",
+    "heatmap_w004.jpg",
+    "heatmap_w005.jpg",
+    "heatmap_w006.jpg",
+    "heatmap_w007.jpg",
+    "heatmap_w008.jpg",
+    "heatmap_w009.jpg"
+  ],
+  "windows": [
+    {
+      "window_id": 1,
+      "t_sec": 1791533740.48,
+      "risk": 0.9214,
+      "category": "Suspicious",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 2,
+      "t_sec": 1791533741.61,
+      "risk": 0.9425,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 3,
+      "t_sec": 1791533742.61,
+      "risk": 0.953,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 4,
+      "t_sec": 1791533743.61,
+      "risk": 0.9584,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 5,
+      "t_sec": 1791533744.68,
+      "risk": 0.9611,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 6,
+      "t_sec": 1791533745.75,
+      "risk": 0.9625,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 7,
+      "t_sec": 1791533746.68,
+      "risk": 0.963,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 8,
+      "t_sec": 1791533747.75,
+      "risk": 0.9633,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 9,
+      "t_sec": 1791533748.81,
+      "risk": 0.9634,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    }
+  ]
+}

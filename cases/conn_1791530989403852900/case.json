@@ -1,0 +1,621 @@
+{
+  "session_id": "conn_1791530989403852900",
+  "created_at": 1791531049,
+  "consent_status": "consented",
+  "stubs_in_use": true,
+  "risk_score": 0.3666,
+  "category": "Likely deepfake",
+  "findings": [
+    {
+      "type": "finding",
+      "id": "face",
+      "severity": "high",
+      "title": "Deepfake Boundary Artifacts",
+      "detail": "High-frequency frequency-domain blending seams and temporal embedding flicker detected.",
+      "t": 1791530992.61
+    },
+    {
+      "type": "finding",
+      "id": "face",
+      "severity": "high",
+      "title": "Deepfake Boundary Artifacts",
+      "detail": "High-frequency frequency-domain blending seams and temporal embedding flicker detected.",
+      "t": 1791531007.88
+    },
+    {
+      "type": "finding",
+      "id": "face",
+      "severity": "high",
+      "title": "Deepfake Boundary Artifacts",
+      "detail": "High-frequency frequency-domain blending seams and temporal embedding flicker detected.",
+      "t": 1791531023.41
+    }
+  ],
+  "summary": "Verification session completed with an assessed deepfake risk of 37% (Likely deepfake). Primary anomalies observed include 'Deepfake Boundary Artifacts' and 'Deepfake Boundary Artifacts' across active analysis windows. Recommendation: Escalate for manual analyst review or issue a secondary physical head-turn challenge.",
+  "ai_generated_summary": false,
+  "window_count": 39,
+  "evidence_files": [
+    "heatmap_w001.jpg",
+    "heatmap_w002.jpg",
+    "heatmap_w003.jpg",
+    "heatmap_w004.jpg",
+    "heatmap_w005.jpg",
+    "heatmap_w006.jpg",
+    "heatmap_w007.jpg",
+    "heatmap_w008.jpg",
+    "heatmap_w009.jpg",
+    "heatmap_w010.jpg",
+    "heatmap_w011.jpg",
+    "heatmap_w012.jpg",
+    "heatmap_w013.jpg",
+    "heatmap_w014.jpg",
+    "heatmap_w015.jpg",
+    "heatmap_w016.jpg",
+    "heatmap_w017.jpg",
+    "heatmap_w018.jpg",
+    "heatmap_w019.jpg",
+    "heatmap_w020.jpg",
+    "heatmap_w021.jpg",
+    "heatmap_w022.jpg",
+    "heatmap_w023.jpg",
+    "heatmap_w025.jpg",
+    "heatmap_w026.jpg",
+    "heatmap_w027.jpg",
+    "heatmap_w029.jpg",
+    "heatmap_w030.jpg",
+    "heatmap_w031.jpg",
+    "heatmap_w032.jpg",
+    "heatmap_w033.jpg",
+    "heatmap_w034.jpg",
+    "heatmap_w035.jpg",
+    "heatmap_w037.jpg"
+  ],
+  "windows": [
+    {
+      "window_id": 1,
+      "t_sec": 1791530992.61,
+      "risk": 0.897,
+      "category": "Suspicious",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 2,
+      "t_sec": 1791530993.61,
+      "risk": 0.9082,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 3,
+      "t_sec": 1791530994.61,
+      "risk": 0.9062,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 4,
+      "t_sec": 1791530995.68,
+      "risk": 0.9027,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 5,
+      "t_sec": 1791530996.68,
+      "risk": 0.9084,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 6,
+      "t_sec": 1791530997.68,
+      "risk": 0.9064,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 7,
+      "t_sec": 1791530998.68,
+      "risk": 0.8954,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 8,
+      "t_sec": 1791530999.75,
+      "risk": 0.9046,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 9,
+      "t_sec": 1791531000.75,
+      "risk": 0.9071,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 10,
+      "t_sec": 1791531001.75,
+      "risk": 0.894,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 11,
+      "t_sec": 1791531003.75,
+      "risk": 0.9063,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 12,
+      "t_sec": 1791531004.81,
+      "risk": 0.8894,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 13,
+      "t_sec": 1791531005.88,
+      "risk": 0.9037,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 14,
+      "t_sec": 1791531006.88,
+      "risk": 0.9112,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 15,
+      "t_sec": 1791531007.88,
+      "risk": 0.892,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 16,
+      "t_sec": 1791531008.95,
+      "risk": 0.9069,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 17,
+      "t_sec": 1791531010.01,
+      "risk": 0.9117,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 18,
+      "t_sec": 1791531011.08,
+      "risk": 0.8954,
+      "category": "Likely deepfake",
+      "quality_trust": 0.7,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 19,
+      "t_sec": 1791531012.08,
+      "risk": 0.9084,
+      "category": "Likely deepfake",
+      "quality_trust": 0.714,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 20,
+      "t_sec": 1791531013.15,
+      "risk": 0.9102,
+      "category": "Likely deepfake",
+      "quality_trust": 0.753,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 21,
+      "t_sec": 1791531014.15,
+      "risk": 0.8778,
+      "category": "Likely deepfake",
+      "quality_trust": 0.82,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 22,
+      "t_sec": 1791531015.21,
+      "risk": 0.7535,
+      "category": "Likely deepfake",
+      "quality_trust": 0.863,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 23,
+      "t_sec": 1791531017.21,
+      "risk": 0.6929,
+      "category": "Likely deepfake",
+      "quality_trust": 0.934,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 24,
+      "t_sec": 1791531018.28,
+      "risk": 0.4543,
+      "category": "Likely deepfake",
+      "quality_trust": 0.956,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "ok",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 25,
+      "t_sec": 1791531019.28,
+      "risk": 0.5822,
+      "category": "Likely deepfake",
+      "quality_trust": 0.993,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 26,
+      "t_sec": 1791531020.35,
+      "risk": 0.7103,
+      "category": "Likely deepfake",
+      "quality_trust": 0.942,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 27,
+      "t_sec": 1791531021.28,
+      "risk": 0.7403,
+      "category": "Likely deepfake",
+      "quality_trust": 0.941,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 28,
+      "t_sec": 1791531022.35,
+      "risk": 0.4649,
+      "category": "Likely deepfake",
+      "quality_trust": 0.962,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "ok",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 29,
+      "t_sec": 1791531023.41,
+      "risk": 0.6641,
+      "category": "Likely deepfake",
+      "quality_trust": 0.998,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 30,
+      "t_sec": 1791531024.41,
+      "risk": 0.81,
+      "category": "Likely deepfake",
+      "quality_trust": 0.976,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 31,
+      "t_sec": 1791531025.21,
+      "risk": 0.8831,
+      "category": "Likely deepfake",
+      "quality_trust": 0.961,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 32,
+      "t_sec": 1791531026.35,
+      "risk": 0.9199,
+      "category": "Likely deepfake",
+      "quality_trust": 0.946,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 33,
+      "t_sec": 1791531027.55,
+      "risk": 0.9382,
+      "category": "Likely deepfake",
+      "quality_trust": 0.95,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 34,
+      "t_sec": 1791531028.61,
+      "risk": 0.9476,
+      "category": "Likely deepfake",
+      "quality_trust": 0.936,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 35,
+      "t_sec": 1791531030.68,
+      "risk": 0.9531,
+      "category": "Likely deepfake",
+      "quality_trust": 0.887,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 36,
+      "t_sec": 1791531031.68,
+      "risk": 0.6287,
+      "category": "Likely deepfake",
+      "quality_trust": 0.908,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "ok",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 37,
+      "t_sec": 1791531032.68,
+      "risk": 0.788,
+      "category": "Likely deepfake",
+      "quality_trust": 0.901,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "bad",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 38,
+      "t_sec": 1791531033.75,
+      "risk": 0.487,
+      "category": "Likely deepfake",
+      "quality_trust": 0.876,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "ok",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    },
+    {
+      "window_id": 39,
+      "t_sec": 1791531034.75,
+      "risk": 0.3666,
+      "category": "Likely deepfake",
+      "quality_trust": 0.817,
+      "checks": {
+        "source": "ok",
+        "light": "ok",
+        "face": "ok",
+        "voice": "ok",
+        "lips": "ok"
+      }
+    }
+  ]
+}
