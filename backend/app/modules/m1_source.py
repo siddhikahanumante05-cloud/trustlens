@@ -83,7 +83,7 @@ class SourceLivenessModule(ExpertModule):
                 )
             )
 
-        if presentation_res.replay_score >= 0.60 or presentation_res.glare_score >= 0.55:
+        if presentation_res.replay_score >= 0.60:
             findings.append(
                 FindingEvent(
                     id="source",
@@ -93,7 +93,7 @@ class SourceLivenessModule(ExpertModule):
                     t=round(inputs.t_sec, 2),
                 )
             )
-        elif presentation_res.replay_score >= 0.35 or presentation_res.glare_score >= 0.35:
+        elif presentation_res.replay_score >= 0.35:
             findings.append(
                 FindingEvent(
                     id="source",

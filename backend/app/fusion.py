@@ -158,8 +158,7 @@ class FusionEngine:
         # 1. Source / Provenance & Mobile Screen Replay
         src_risk = feat.get("source_risk", 0.0)
         replay = feat.get("replay_score", 0.0)
-        glare = feat.get("screen_glare", 0.0)
-        effective_source_risk = max(src_risk, replay, glare * 0.9)
+        effective_source_risk = max(src_risk, replay)
         if effective_source_risk > 0.50:
             checks["source"] = "bad"
         elif effective_source_risk > 0.20:
@@ -366,10 +365,9 @@ class FusionEngine:
                     res.action_recommended = "Hard gate triggered: Virtual camera with light modulation failure. Escalate for manual review."
                     self._action_emitted = True
 
-            # Hard Gate 2: Mobile Screen Replay / Screen Glass Reflection Detected -> immediate Reject / Deepfake
+            # Hard Gate 2: Mobile Screen Replay Detected -> immediate Reject / Deepfake
             replay = m1.features.get("replay_score", 0.0)
-            glare = m1.features.get("screen_glare", 0.0)
-            if replay >= 0.65 or (glare >= 0.60 and replay >= 0.45):
+            if replay >= 0.65:
                 res.category = "Likely deepfake"
                 res.in_deepfake_state = True
                 res.smoothed_probability = max(res.smoothed_probability, 0.85)

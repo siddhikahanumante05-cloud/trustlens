@@ -506,12 +506,43 @@ def analyze_presentation_replay(
     decoupling_norm = float(np.clip(decoupling_score, 0.0, 1.0)) if glare_is_present else 0.0
     bezel_norm = float(np.clip(max_bezel, 0.0, 1.0)) if (glare_is_present or moire_norm >= 0.35 or chroma_norm >= 0.35) else 0.0
 
+    # 5. Composite Replay Scoring with Corroborated Display Gating
+    has_glass_reflection = (glare_norm >= SCREEN_GLARE_THRESHOLD)
+    has_subpixel_pattern = (moire_norm >= 0.40 or chroma_norm >= 0.40)
+    has_decoupling = (decoupling_norm >= REFLECTION_DECOUPLING_THRESHOLD)
+    has_planar = (planar_norm >= PLANAR_REFLECTION_THRESHOLD)
+    has_bezel = (bezel_norm >= DEVICE_BEZEL_THRESHOLD)
+
+    # Corroborated Physical Display Gating:
+    # A natural specular highlight on human skin (forehead, nose tip) under indoor lighting
+    # must NEVER be classified as screen glare or replay unless corroborated by independent physical display cues.
+    corroborated_display = bool(has_decoupling or has_planar or has_subpixel_pattern or has_bezel)
+
     flags = []
-    if glare_norm >= SCREEN_GLARE_THRESHOLD:
+    if has_glass_reflection and corroborated_display:
         flags.append("SPECULAR_SCREEN_GLARE")
-    if decoupling_norm >= REFLECTION_DECOUPLING_THRESHOLD:
+        confirmed_glare = glare_norm
+        composite = float(np.clip(
+            0.45 * glare_norm + 0.35 * max(decoupling_norm, planar_norm) + 0.25 * max(moire_norm, chroma_norm, bezel_norm) + 0.15,
+            0.65, 1.0
+        ))
+    elif has_subpixel_pattern and (has_bezel or has_decoupling):
+        confirmed_glare = 0.0
+        composite = float(np.clip(0.50 * max(moire_norm, chroma_norm) + 0.35 * max(bezel_norm, decoupling_norm) + 0.20, 0.65, 1.0))
+    elif has_subpixel_pattern:
+        confirmed_glare = 0.0
+        composite = float(np.clip(max(moire_norm, chroma_norm) * 0.80, 0.0, 1.0))
+    elif has_bezel and has_decoupling:
+        confirmed_glare = 0.0
+        composite = float(np.clip(0.50 * bezel_norm + 0.50 * decoupling_norm, 0.65, 1.0))
+    else:
+        # Real 3D human in normal room lighting -> strictly 0.0 (Authentic, NO false positives)
+        confirmed_glare = 0.0
+        composite = 0.0
+
+    if has_decoupling and corroborated_display:
         flags.append("REFLECTION_MOTION_DECOUPLED")
-    if planar_norm >= PLANAR_REFLECTION_THRESHOLD:
+    if has_planar and corroborated_display:
         flags.append("PLANAR_SCREEN_REFLECTION")
     if moire_norm >= 0.40:
         flags.append("MOIRE_PATTERN_DETECTED")
@@ -519,41 +550,18 @@ def analyze_presentation_replay(
         flags.append("SUBPIXEL_LATTICE_DETECTED")
     if bezel_norm >= DEVICE_BEZEL_THRESHOLD:
         flags.append("DEVICE_BEZEL_DETECTED")
-
-    # 5. Composite Replay Scoring with Strict Primary Evidence Gating
-    has_glass_reflection = (glare_norm >= SCREEN_GLARE_THRESHOLD)
-    has_subpixel_pattern = (moire_norm >= 0.40 or chroma_norm >= 0.40)
-
-    if not has_glass_reflection and not has_subpixel_pattern:
-        # Genuine 3D human in normal room lighting -> 0.0 (Authentic, NO false positives)
-        composite = 0.0
-    elif has_glass_reflection and (decoupling_norm >= REFLECTION_DECOUPLING_THRESHOLD or planar_norm >= PLANAR_REFLECTION_THRESHOLD or has_subpixel_pattern):
-        # Definite mobile screen replay: glass glare + motion decoupling / planar glass / Moiré
-        composite = float(np.clip(
-            0.50 * glare_norm + 0.30 * max(decoupling_norm, planar_norm) + 0.25 * max(moire_norm, chroma_norm) + 0.15,
-            0.65, 1.0
-        ))
-    elif has_glass_reflection:
-        # Isolated glass glare on screen
-        composite = float(np.clip(glare_norm * 0.70, 0.0, 0.80))
-    elif has_subpixel_pattern:
-        # Screen subpixel lattice / Moiré pattern
-        composite = float(np.clip(max(moire_norm, chroma_norm) * 0.80, 0.0, 1.0))
-    else:
-        composite = 0.0
-
     if composite >= SCREEN_REPLAY_RISK_THRESHOLD:
         flags.append("SCREEN_REPLAY_DETECTED")
 
     return PresentationResult(
         replay_score=composite,
-        glare_score=glare_norm,
-        decoupling_score=decoupling_norm,
-        planar_score=planar_norm,
+        glare_score=confirmed_glare,
+        decoupling_score=decoupling_norm if corroborated_display else 0.0,
+        planar_score=planar_norm if corroborated_display else 0.0,
         moire_score=moire_norm,
         chroma_lattice_score=chroma_norm,
         bezel_score=bezel_norm,
-        veiling_glare_score=round(mean_veiling, 3),
+        veiling_glare_score=round(mean_veiling, 3) if corroborated_display else 0.0,
         flags=flags,
         details={
             "mean_spike": round(mean_spike, 3),

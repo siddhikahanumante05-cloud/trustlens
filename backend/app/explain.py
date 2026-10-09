@@ -38,7 +38,7 @@ class ExplainEngine:
         replay_score = features.get("replay_score", 0.0)
         screen_glare = features.get("screen_glare", 0.0)
 
-        if replay_score >= 0.60 or screen_glare >= 0.55:
+        if replay_score >= 0.60:
             candidates.append(
                 FindingEvent(
                     id="source",
@@ -48,7 +48,7 @@ class ExplainEngine:
                     t=round(t_sec, 2),
                 )
             )
-        elif replay_score >= 0.35 or screen_glare >= 0.35:
+        elif replay_score >= 0.35:
             candidates.append(
                 FindingEvent(
                     id="source",
