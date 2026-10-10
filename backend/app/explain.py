@@ -130,6 +130,28 @@ class ExplainEngine:
                 )
             )
 
+        static_face = features.get("static_face_risk", 0.0)
+        if static_face >= 0.70:
+            candidates.append(
+                FindingEvent(
+                    id="face",
+                    severity="high",
+                    title="Static 2D Photo Attack Detected",
+                    detail="Zero biological facial motion or eye blinking observed. Face exhibits static 2D planar behavior.",
+                    t=round(t_sec, 2),
+                )
+            )
+        elif static_face >= 0.35:
+            candidates.append(
+                FindingEvent(
+                    id="face",
+                    severity="medium",
+                    title="Low Facial Dynamics Warning",
+                    detail="Abnormally static facial expression with minimal biological micro-movement.",
+                    t=round(t_sec, 2),
+                )
+            )
+
         # 4. Voice spoofing
         spoof_max = features.get("spoof_max", 0.0)
         if spoof_max >= 0.65:

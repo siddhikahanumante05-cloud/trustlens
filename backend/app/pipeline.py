@@ -141,6 +141,7 @@ class LivePipeline:
             mouth_apertures=prep.mouth_apertures,
             skin_rois=prep.skin_rois,
             hand_occlusion_score=prep.hand_occlusion_score,
+            face_bboxes=prep.face_bboxes,
             quality=prep.quality,
             metadata={
                 "camera_label": self.camera_label,

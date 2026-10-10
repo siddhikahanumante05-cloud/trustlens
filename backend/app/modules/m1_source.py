@@ -58,6 +58,7 @@ class SourceLivenessModule(ExpertModule):
             face_crops=inputs.face_crops,
             frames=inputs.frames,
             landmarks_series=inputs.landmarks_series,
+            face_bboxes=inputs.face_bboxes,
         )
 
         # Findings generation

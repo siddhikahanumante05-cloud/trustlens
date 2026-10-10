@@ -110,6 +110,26 @@ def test_m4_geometry_module():
     assert res.module_id == "M4_geometry"
     assert res.status == "ok"
     assert "landmark_jitter" in res.features
+    assert "static_face_risk" in res.features
+
+
+def test_m4_geometry_static_photo_attack_detected():
+    """Verify static photo presentation attack is flagged across consecutive windows."""
+    inputs = make_dummy_inputs()
+    # Populate with static face photo crops
+    static_crop = np.full((160, 160, 3), 128, dtype=np.uint8)
+    static_crop[40:120, 40:120] = [180, 160, 140]
+    inputs.face_crops = [static_crop.copy() for _ in range(16)]
+
+    m4 = FaceGeometryModule()
+    # Window 1: warning / low dynamics
+    res1 = m4.run(inputs)
+    assert res1.features["static_face_risk"] >= 0.35
+
+    # Window 2: confirmed static 2D photo attack
+    res2 = m4.run(inputs)
+    assert res2.features["static_face_risk"] >= 0.70
+    assert any("Static 2D Photo Attack" in f.title for f in res2.findings)
 
 
 def test_m4_geometry_skip_when_no_landmarks():

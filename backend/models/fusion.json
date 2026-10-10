@@ -25,7 +25,8 @@
     "quality_trust": -0.70,
     "replay_score": 2.40,
     "screen_glare": 1.60,
-    "reflection_decoupling": 1.50
+    "reflection_decoupling": 1.50,
+    "static_face_risk": 2.50
   },
   "neutral_values": {
     "source_risk": 0.0,
@@ -50,6 +51,7 @@
     "quality_trust": 0.85,
     "replay_score": 0.0,
     "screen_glare": 0.0,
-    "reflection_decoupling": 0.0
+    "reflection_decoupling": 0.0,
+    "static_face_risk": 0.0
   }
 }

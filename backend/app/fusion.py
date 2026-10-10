@@ -57,6 +57,7 @@ class WindowFeatures:
     replay_score: Optional[float] = None
     screen_glare: Optional[float] = None
     reflection_decoupling: Optional[float] = None
+    static_face_risk: Optional[float] = None
 
 
 @dataclass
@@ -173,13 +174,14 @@ class FusionEngine:
             elif light_corr < 0.35:
                 checks["light"] = "warn"
 
-        # 3. Face Artifacts & Flicker
+        # 3. Face Artifacts, Flicker & Biological Liveness
         edge_logit = feat.get("edge_logit", 0.0)
         flicker = feat.get("identity_flicker", 0.0)
         jitter = feat.get("landmark_jitter", 0.0)
-        if edge_logit > 0.80 or flicker > 0.50:
+        static_face = feat.get("static_face_risk", 0.0)
+        if edge_logit > 0.80 or flicker > 0.50 or static_face > 0.60:
             checks["face"] = "bad"
-        elif edge_logit > 0.30 or flicker > 0.25 or jitter > 0.06:
+        elif edge_logit > 0.30 or flicker > 0.25 or jitter > 0.06 or static_face > 0.35:
             checks["face"] = "warn"
 
         # 4. Voice Spoof
@@ -350,6 +352,7 @@ class FusionEngine:
             replay_score=aggregated_features.get("replay_score"),
             screen_glare=aggregated_features.get("screen_glare"),
             reflection_decoupling=aggregated_features.get("reflection_decoupling"),
+            static_face_risk=aggregated_features.get("static_face_risk"),
         )
 
         # Standard window processing
@@ -367,13 +370,26 @@ class FusionEngine:
 
             # Hard Gate 2: Mobile Screen Replay Detected -> immediate Reject / Deepfake
             replay = m1.features.get("replay_score", 0.0)
-            if replay >= 0.65:
+            if replay >= 0.70:
                 res.category = "Likely deepfake"
                 res.in_deepfake_state = True
                 res.smoothed_probability = max(res.smoothed_probability, 0.85)
                 res.calibrated_probability = max(res.calibrated_probability, 0.85)
                 if not self._action_emitted:
-                    res.action_recommended = "Mobile screen replay detected via glass reflection and display artifacts. Escalate for manual review."
+                    res.action_recommended = "Mobile screen replay detected via physical display artifacts. Escalate for manual review."
+                    self._action_emitted = True
+
+        # Hard Gate 3: Static 2D Photo Attack Detected -> immediate Reject / Deepfake
+        m4 = active_modules.get("M4_geometry")
+        if m4 and m4.status == "ok":
+            static_risk = m4.features.get("static_face_risk", 0.0)
+            if static_risk >= 0.70:
+                res.category = "Likely deepfake"
+                res.in_deepfake_state = True
+                res.smoothed_probability = max(res.smoothed_probability, 0.85)
+                res.calibrated_probability = max(res.calibrated_probability, 0.85)
+                if not self._action_emitted:
+                    res.action_recommended = "Static 2D photo attack detected: Lack of biological facial motion. Prompt caller to blink or turn head."
                     self._action_emitted = True
 
         return res

@@ -362,7 +362,7 @@ def detect_planar_reflection_uniformity(
     h, w = gray.shape
 
     # Focus on the highest luminance pixels in the reflection region
-    threshold = max(180, int(np.percentile(gray, 75)))
+    threshold = max(215, int(np.percentile(gray, 92)))
     y_coords, x_coords = np.where(gray >= threshold)
 
     if len(x_coords) < 30:
@@ -514,27 +514,31 @@ def analyze_presentation_replay(
     has_bezel = (bezel_norm >= DEVICE_BEZEL_THRESHOLD)
 
     # Corroborated Physical Display Gating:
-    # A natural specular highlight on human skin (forehead, nose tip) under indoor lighting
+    # A natural specular highlight on human skin (forehead, nose tip) or eyeglasses under indoor lighting
     # must NEVER be classified as screen glare or replay unless corroborated by independent physical display cues.
-    corroborated_display = bool(has_decoupling or has_planar or has_subpixel_pattern or has_bezel)
+    corroborated_display = bool(
+        has_subpixel_pattern
+        or (has_bezel and (has_planar or has_decoupling))
+        or (has_decoupling and (has_glass_reflection or has_planar))
+    )
 
     flags = []
     if has_glass_reflection and corroborated_display:
         flags.append("SPECULAR_SCREEN_GLARE")
         confirmed_glare = glare_norm
         composite = float(np.clip(
-            0.45 * glare_norm + 0.35 * max(decoupling_norm, planar_norm) + 0.25 * max(moire_norm, chroma_norm, bezel_norm) + 0.15,
-            0.65, 1.0
+            0.40 * glare_norm + 0.35 * max(decoupling_norm, planar_norm) + 0.25 * max(moire_norm, chroma_norm, bezel_norm),
+            0.0, 1.0
         ))
     elif has_subpixel_pattern and (has_bezel or has_decoupling):
         confirmed_glare = 0.0
-        composite = float(np.clip(0.50 * max(moire_norm, chroma_norm) + 0.35 * max(bezel_norm, decoupling_norm) + 0.20, 0.65, 1.0))
+        composite = float(np.clip(0.50 * max(moire_norm, chroma_norm) + 0.35 * max(bezel_norm, decoupling_norm) + 0.20, 0.0, 1.0))
     elif has_subpixel_pattern:
         confirmed_glare = 0.0
         composite = float(np.clip(max(moire_norm, chroma_norm) * 0.80, 0.0, 1.0))
     elif has_bezel and has_decoupling:
         confirmed_glare = 0.0
-        composite = float(np.clip(0.50 * bezel_norm + 0.50 * decoupling_norm, 0.65, 1.0))
+        composite = float(np.clip(0.50 * bezel_norm + 0.50 * decoupling_norm, 0.0, 1.0))
     else:
         # Real 3D human in normal room lighting -> strictly 0.0 (Authentic, NO false positives)
         confirmed_glare = 0.0

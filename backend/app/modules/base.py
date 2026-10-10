@@ -31,13 +31,12 @@ class ModuleInputs:
     mouth_apertures: List[float]        # Normalized mouth apertures per frame
     skin_rois: Dict[str, List[Dict[str, float]]]  # "face", "neck", "background" chromaticity/luminance
     hand_occlusion_score: float         # 0.0 to 1.0
-
-    # Quality assessments
     quality: Dict[str, float]           # blur, brightness, face_ratio, quality_trust
 
     # Challenges and metadata
     metadata: Dict[str, Any]            # Camera label, frame_intervals_ms, WebRTC stats
     challenges: List[Dict[str, Any]]    # Active light or phrase challenge events
+    face_bboxes: Optional[List[Any]] = None  # Bounding boxes (x, y, w, h) per frame
     tap_mode: str = "agent"             # "agent" | "caller"
 
 

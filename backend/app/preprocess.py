@@ -21,6 +21,7 @@ class PreprocessedWindow:
     quality: Dict[str, float]              # blur, brightness, face_ratio, quality_trust
     audio: np.ndarray                      # 48,000 samples (16kHz)
     timestamps: List[float]                # 16 timestamps
+    face_bboxes: List[Any] = field(default_factory=list) # 16 face bounding boxes (x, y, w, h)
     challenges: List[Dict[str, Any]] = field(default_factory=list)
 
 
@@ -30,7 +31,9 @@ class Preprocessor:
     def __init__(self, crop_size: int = 160):
         self.crop_size = crop_size
         self._landmarker = None
+        self._yunet = None
         self._init_mediapipe_landmarker()
+        self._init_yunet_detector()
 
     def _init_mediapipe_landmarker(self):
         """Initialize MediaPipe FaceLandmarker if task model is present."""
@@ -52,9 +55,17 @@ class Preprocessor:
                 self._landmarker = FaceLandmarker.create_from_options(options)
                 logger.info("MediaPipe FaceLandmarker loaded from %s", task_path)
             except Exception as e:
-                logger.warning("Failed to initialize MediaPipe FaceLandmarker: %s. Using heuristic tracker.", e)
-        else:
-            logger.info("MediaPipe task bundle not found at %s. Using robust geometric detector.", task_path)
+                logger.warning("Failed to initialize MediaPipe FaceLandmarker: %s.", e)
+
+    def _init_yunet_detector(self):
+        """Initialize YuNet ONNX face & landmark detector if present."""
+        yunet_path = os.path.join(os.path.dirname(__file__), "..", "models", "face_detection_yunet_2023mar.onnx")
+        if os.path.exists(yunet_path) and hasattr(cv2, "FaceDetectorYN"):
+            try:
+                self._yunet = cv2.FaceDetectorYN.create(yunet_path, "", (320, 240), score_threshold=0.50)
+                logger.info("YuNet neural face detector loaded from %s", yunet_path)
+            except Exception as e:
+                logger.warning("Failed to initialize YuNet: %s", e)
 
     def process_window(
         self,
@@ -75,6 +86,8 @@ class Preprocessor:
         total_brightness = 0.0
         face_detected_count = 0
 
+        face_bboxes_list: List[Optional[Tuple[int, int, int, int]]] = []
+
         for frame in frames:
             h, w, c = frame.shape
             gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
@@ -85,6 +98,7 @@ class Preprocessor:
 
             # Face detection & bounding box estimation
             bbox, landmarks, aperture = self._detect_face_and_landmarks(frame)
+            face_bboxes_list.append(bbox)
 
             if bbox is not None:
                 face_detected_count += 1
@@ -140,6 +154,7 @@ class Preprocessor:
                 "neck": neck_rois_stats,
                 "background": bg_rois_stats,
             },
+            face_bboxes=face_bboxes_list,
             hand_occlusion_score=0.0,
             quality={
                 "blur": avg_blur,
@@ -188,32 +203,63 @@ class Preprocessor:
                     bw = int(np.max(xs) - bx)
                     bh = int(np.max(ys) - by)
 
-                    # Inter-ocular distance: Landmark 33 (left outer eye) to 263 (right outer eye)
                     iod = np.linalg.norm(coords[33, :2] - coords[263, :2])
-                    # Mouth aperture: Landmark 13 (upper inner lip) to 14 (lower inner lip)
                     mouth_dist = np.linalg.norm(coords[13, :2] - coords[14, :2])
                     aperture = float(mouth_dist / (iod + 1e-6))
                     return (bx, by, bw, bh), coords, aperture
             except Exception as e:
                 logger.debug("MediaPipe detection exception: %s", e)
 
-        # 2. Geometric & skin-color segmentation fallback
-        # Face box fallback: central 60% of frame with skin-color detection
+        # 2. YuNet neural face & landmark detection if present
+        if self._yunet is not None:
+            try:
+                self._yunet.setInputSize((w, h))
+                ret, faces = self._yunet.detect(frame)
+                if faces is not None and len(faces) > 0:
+                    f = faces[0]
+                    bx = max(0, int(f[0]))
+                    by = max(0, int(f[1]))
+                    bw = min(w - bx, int(f[2]))
+                    bh = min(h - by, int(f[3]))
+
+                    re_x, re_y = float(f[4]), float(f[5])
+                    le_x, le_y = float(f[6]), float(f[7])
+                    nose_x, nose_y = float(f[8]), float(f[9])
+                    rm_x, rm_y = float(f[10]), float(f[11])
+                    lm_x, lm_y = float(f[12]), float(f[13])
+
+                    coords = np.zeros((478, 3), dtype=np.float32)
+                    coords[33] = [re_x / (w + 1e-6), re_y / (h + 1e-6), 0.0]
+                    coords[263] = [le_x / (w + 1e-6), le_y / (h + 1e-6), 0.0]
+                    coords[1] = [nose_x / (w + 1e-6), nose_y / (h + 1e-6), 0.0]
+                    coords[61] = [rm_x / (w + 1e-6), rm_y / (h + 1e-6), 0.0]
+                    coords[291] = [lm_x / (w + 1e-6), lm_y / (h + 1e-6), 0.0]
+
+                    mouth_cx = (rm_x + lm_x) / 2.0
+                    mouth_cy = (rm_y + lm_y) / 2.0
+                    coords[13] = [mouth_cx / (w + 1e-6), (mouth_cy - 2.0) / (h + 1e-6), 0.0]
+                    coords[14] = [mouth_cx / (w + 1e-6), (mouth_cy + 2.0) / (h + 1e-6), 0.0]
+
+                    iod = np.linalg.norm(np.array([re_x, re_y]) - np.array([le_x, le_y]))
+                    mouth_w = np.linalg.norm(np.array([rm_x, rm_y]) - np.array([lm_x, lm_y]))
+                    aperture = float(mouth_w / (iod + 1e-6))
+
+                    return (bx, by, bw, bh), coords, aperture
+            except Exception as e:
+                logger.debug("YuNet detection exception: %s", e)
+
+        # 3. Geometric fallback: central 60% of frame
         bx = int(w * 0.2)
         by = int(h * 0.15)
         bw = int(w * 0.6)
         bh = int(h * 0.7)
 
-        # Synthetic 478-point landmark array anchored to box
         pseudo_landmarks = np.zeros((478, 3), dtype=np.float32)
-        # Eye landmarks 33 and 263
         pseudo_landmarks[33] = [0.35, 0.4, 0.0]
         pseudo_landmarks[263] = [0.65, 0.4, 0.0]
-        # Lip landmarks 13 and 14
         pseudo_landmarks[13] = [0.5, 0.68, 0.0]
         pseudo_landmarks[14] = [0.5, 0.72, 0.0]
 
-        # Calculate mouth aperture: vertical lip / eye distance
         iod = np.linalg.norm(pseudo_landmarks[33, :2] - pseudo_landmarks[263, :2])
         mouth_dist = np.linalg.norm(pseudo_landmarks[13, :2] - pseudo_landmarks[14, :2])
         aperture = float(mouth_dist / (iod + 1e-6))
