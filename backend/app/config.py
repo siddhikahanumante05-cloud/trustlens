@@ -2,11 +2,10 @@
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    ALLOWED_ORIGINS: str = "*"
     API_TOKEN: str = ""
     SECRET_KEY: str = "trustlens-insecure-secret-change-me"
     USE_MOCK: bool = False
@@ -20,7 +19,7 @@ class Settings(BaseSettings):
     CASE_TTL_HOURS: int = 24
     OLLAMA_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:3b"
-    NARRATOR_MODE: str = "auto"  # auto | template | llm
+    NARRATOR_MODE: str = "template"  # auto | template | llm (template deferred to save RAM)
     MEMORY_PROFILE: str = "8gb"
     TAP: str = "agent"  # agent | caller
     LLM_TIMEOUT_SEC: float = 8.0

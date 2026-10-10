@@ -106,39 +106,72 @@ def analyze_light_response(
 
     # 2. Self-referenced white sync pulse alignment
     sync_pulse_found = False
-    lag_ms = 0.0
+    sync_shift = 0
     if len(y_face) >= 6:
         face_lum_diff = np.diff(y_face)
         if len(face_lum_diff) > 0:
             peak_idx = int(np.argmax(face_lum_diff))
-            if peak_idx < len(y_face) // 2:
+            if 0 <= peak_idx < len(y_face) // 2:
                 sync_pulse_found = True
-                lag_ms = float(peak_idx * (1000.0 / 15.0))
+                sync_shift = peak_idx
 
-    # 3. High-pass filter (remove slow ambient drift)
+    # 3. High-pass filter & centering across all color channels (r, g, y)
     r_face_hp = r_face - np.mean(r_face)
+    g_face_hp = g_face - np.mean(g_face)
+    y_face_hp = y_face - np.mean(y_face)
+
     r_target_hp = r_target - np.mean(r_target)
+    g_target_hp = g_target - np.mean(g_target)
+    y_target_hp = y_target - np.mean(y_target)
 
-    # 4. Normalized cross-correlation across causal lag search (0 to 600 ms)
-    max_corr = -1.0
-    best_lag_frames = 0
-    max_lag_frames = min(5, int((LIGHT_MAX_LAG_SEARCH_MS / 1000.0) * 15.0))  # Up to ~333 ms causal search
+    # Apply sync pulse alignment shift if detected
+    if sync_pulse_found and sync_shift > 0:
+        # Pre-align target sequence to sync pulse onset
+        r_target_hp = np.roll(r_target_hp, sync_shift)
+        g_target_hp = np.roll(g_target_hp, sync_shift)
+        y_target_hp = np.roll(y_target_hp, sync_shift)
 
-    for shift in range(0, max_lag_frames + 1):
-        if shift > 0:
-            s_face = r_face_hp[shift:]
-            s_target = r_target_hp[:-shift]
-        else:
-            s_face = r_face_hp
-            s_target = r_target_hp
+    # 4. Normalized cross-correlation across causal lag search using all color channels
+    def _channel_corr(s_obs: np.ndarray, s_tgt: np.ndarray, max_shifts: int) -> Tuple[float, int]:
+        best_c = -1.0
+        best_s = 0
+        for shift in range(0, max_shifts + 1):
+            cur_obs = s_obs[shift:] if shift > 0 else s_obs
+            cur_tgt = s_tgt[:-shift] if shift > 0 else s_tgt
+            if len(cur_obs) >= 8 and np.std(cur_obs) > 1e-5 and np.std(cur_tgt) > 1e-5:
+                c = float(np.corrcoef(cur_obs, cur_tgt)[0, 1])
+                if c > best_c:
+                    best_c = c
+                    best_s = shift
+        return best_c, best_s
 
-        if len(s_face) >= 10 and np.std(s_face) > 1e-6 and np.std(s_target) > 1e-6:
-            norm_corr = float(np.corrcoef(s_face, s_target)[0, 1])
-            if norm_corr > max_corr:
-                max_corr = norm_corr
-                best_lag_frames = shift
+    max_lag_frames = min(5, int((LIGHT_MAX_LAG_SEARCH_MS / 1000.0) * 15.0))
+    corr_r, shift_r = _channel_corr(r_face_hp, r_target_hp, max_lag_frames)
+    corr_g, shift_g = _channel_corr(g_face_hp, g_target_hp, max_lag_frames)
+    corr_y, shift_y = _channel_corr(y_face_hp, y_target_hp, max_lag_frames)
 
-    corr_face = float(max(-1.0, min(1.0, max_corr)))
+    # Multi-channel weighted correlation (R channel has strongest skin reflectance contrast)
+    weights = []
+    corrs = []
+    if corr_r > -1.0:
+        corrs.append(corr_r)
+        weights.append(0.60)
+    if corr_g > -1.0:
+        corrs.append(corr_g)
+        weights.append(0.20)
+    if corr_y > -1.0:
+        corrs.append(corr_y)
+        weights.append(0.20)
+
+    if weights:
+        w_sum = sum(weights)
+        corr_face = float(sum(c * (w / w_sum) for c, w in zip(corrs, weights)))
+        best_lag_frames = shift_r
+    else:
+        corr_face = float(max(-1.0, min(1.0, corr_r)))
+        best_lag_frames = 0
+
+    corr_face = float(max(-1.0, min(1.0, corr_face)))
     estimated_lag_ms = float(best_lag_frames * (1000.0 / 15.0))
 
     # 5. Neck vs Face check
