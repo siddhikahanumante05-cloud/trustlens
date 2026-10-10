@@ -70,11 +70,28 @@ class ModelRuntime:
             opts.inter_op_num_threads = 1
             opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
+            self.pytorch_model = None
+            pt_model_path = os.path.join(models_dir, "edgenet.pt")
+            if os.path.exists(pt_model_path):
+                try:
+                    import torch
+                    import importlib
+                    edgenet_cls = importlib.import_module("ml.03_train_edgenet").EdgeNet
+                    pt_net = edgenet_cls()
+                    pt_net.load_state_dict(torch.load(pt_model_path, map_location="cpu"))
+                    pt_net.eval()
+                    self.pytorch_model = pt_net
+                    self.stubs_in_use = False
+                    logger.info("EdgeNet trained PyTorch model loaded successfully from edgenet.pt! (Stubs disabled)")
+                except Exception as ex:
+                    logger.warning("Could not load edgenet.pt: %s", ex)
+
             edgenet_path = os.path.join(models_dir, "edgenet_int8.onnx")
             if os.path.exists(edgenet_path):
                 self.sessions["edgenet"] = ort.InferenceSession(
                     edgenet_path, sess_options=opts, providers=["CPUExecutionProvider"]
                 )
+                self.stubs_in_use = False
                 logger.info("EdgeNet INT8 ONNX session initialized.")
 
             clip_path = os.path.join(models_dir, "clip_head_int8.onnx")
@@ -149,16 +166,31 @@ class ModelRuntime:
         )
 
     def _run_edgenet(self, face_crops: List[np.ndarray]) -> float:
-        """Fast path: MobileNetV3-Small + Frequency branch."""
-        if "edgenet" in self.sessions and len(face_crops) >= 16:
-            try:
-                crops_arr = np.array(face_crops[:16], dtype=np.float32) / 255.0
-                crops_t = np.transpose(crops_arr, (0, 3, 1, 2))  # (16, 3, 160, 160)
-                input_feed = {"frames": np.expand_dims(crops_t, axis=0)}
-                out = self.sessions["edgenet"].run(["edge_logit"], input_feed)[0]
-                return float(out[0, 0])
-            except Exception as e:
-                logger.warning("EdgeNet session run error: %s", e)
+        """Fast path: MobileNetV3-Small + Frequency branch (via PyTorch CPU or ONNX)."""
+        if len(face_crops) >= 16:
+            # 1. Check direct PyTorch model (39ms on CPU)
+            if hasattr(self, "pytorch_model") and self.pytorch_model is not None:
+                try:
+                    import torch
+                    crops_arr = np.array(face_crops[:16], dtype=np.float32) / 255.0
+                    crops_t = np.transpose(crops_arr, (0, 3, 1, 2))  # (16, 3, 160, 160)
+                    t_in = torch.from_numpy(crops_t).unsqueeze(0)    # (1, 16, 3, 160, 160)
+                    with torch.no_grad():
+                        out = self.pytorch_model(t_in)
+                    return float(out[0, 0])
+                except Exception as e:
+                    logger.warning("EdgeNet PyTorch forward run error: %s", e)
+
+            # 2. Check ONNX session
+            if "edgenet" in self.sessions:
+                try:
+                    crops_arr = np.array(face_crops[:16], dtype=np.float32) / 255.0
+                    crops_t = np.transpose(crops_arr, (0, 3, 1, 2))  # (16, 3, 160, 160)
+                    input_feed = {"frames": np.expand_dims(crops_t, axis=0)}
+                    out = self.sessions["edgenet"].run(["edge_logit"], input_feed)[0]
+                    return float(out[0, 0])
+                except Exception as e:
+                    logger.warning("EdgeNet ONNX session run error: %s", e)
 
         # Neutral fallback when models are warming up or face crops absent
         return 0.0

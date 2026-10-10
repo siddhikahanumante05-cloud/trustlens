@@ -9,5 +9,6 @@ export default defineConfig({
         host: true, // Allows access from any device on the network
         port: 5173, // You can change this to your preferred port
         open: true, // Automatically opens the app in the browser
+        allowedHosts: true, // Allow localtunnel, ngrok, and any custom domain
     },
 })

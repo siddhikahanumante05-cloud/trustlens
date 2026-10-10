@@ -100,8 +100,10 @@ class EdgeNet(nn.Module):
             num_layers=1,
             batch_first=True,
         )
+        # Temporal head: mean and standard deviation of per-frame embeddings + GRU hidden state
+        # The standard deviation directly captures temporal flicker
         self.classifier = nn.Sequential(
-            nn.Linear(128, 64),
+            nn.Linear(128 + 128 + 128, 64),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
             nn.Linear(64, 1),
@@ -119,7 +121,11 @@ class EdgeNet(nn.Module):
 
         gru_out, _ = self.gru(combined_seq)  # (B, T, 128)
         last_hidden = gru_out[:, -1, :]      # (B, 128)
-        logit = self.classifier(last_hidden) # (B, 1)
+        mean_emb = combined_seq.mean(dim=1)  # (B, 128)
+        std_emb = combined_seq.std(dim=1)    # (B, 128) flicker signature
+
+        temporal_pooled = torch.cat([last_hidden, mean_emb, std_emb], dim=-1)
+        logit = self.classifier(temporal_pooled) # (B, 1)
         return logit
 
 
