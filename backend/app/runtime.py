@@ -74,8 +74,12 @@ class ModelRuntime:
             pt_model_path = os.path.join(models_dir, "edgenet.pt")
             if os.path.exists(pt_model_path):
                 try:
+                    import sys
                     import torch
                     import importlib
+                    repo_root = os.path.abspath(os.path.join(models_dir, "..", ".."))
+                    if repo_root not in sys.path:
+                        sys.path.insert(0, repo_root)
                     edgenet_cls = importlib.import_module("ml.03_train_edgenet").EdgeNet
                     pt_net = edgenet_cls()
                     pt_net.load_state_dict(torch.load(pt_model_path, map_location="cpu"))
@@ -107,6 +111,26 @@ class ModelRuntime:
                     wavlm_path, sess_options=opts, providers=["CPUExecutionProvider"]
                 )
                 logger.info("WavLM Head INT8 ONNX session initialized.")
+
+            # PyTorch wavlm_head.pt fallback / direct load
+            self.audio_pytorch_model = None
+            pt_audio_path = os.path.join(models_dir, "wavlm_head.pt")
+            if os.path.exists(pt_audio_path):
+                try:
+                    import sys
+                    import torch
+                    import importlib
+                    repo_root = os.path.abspath(os.path.join(models_dir, "..", ".."))
+                    if repo_root not in sys.path:
+                        sys.path.insert(0, repo_root)
+                    wavlm_cls = importlib.import_module("ml.05_train_wavlm_head").WavLMSpoofHead
+                    pt_audio = wavlm_cls(embed_dim=768)
+                    pt_audio.load_state_dict(torch.load(pt_audio_path, map_location="cpu"), strict=False)
+                    pt_audio.eval()
+                    self.audio_pytorch_model = pt_audio
+                    logger.info("WavLM Audio Spoof PyTorch model loaded successfully from wavlm_head.pt!")
+                except Exception as ex:
+                    logger.warning("Could not load wavlm_head.pt: %s", ex)
 
             if len(self.sessions) >= 3:
                 self.stubs_in_use = False
@@ -261,12 +285,19 @@ class ModelRuntime:
             except Exception as e:
                 logger.warning("CLIP session error: %s", e)
 
-        # 2. WavLM Head Audio Spoof Inference
-        if "wavlm_head" in self.sessions and len(audio_pcm) >= 8000:
+        # 2. WavLM Head Audio Spoof Inference (PyTorch or ONNX)
+        if (getattr(self, "audio_pytorch_model", None) is not None or "wavlm_head" in self.sessions) and len(audio_pcm) >= 8000:
             try:
                 audio_feats = self._extract_audio_features(audio_pcm)
-                out = self.sessions["wavlm_head"].run(["spoof_logit"], {"audio_features": audio_feats})[0]
-                raw_spoof_logit = float(out[0, 0])
+                if getattr(self, "audio_pytorch_model", None) is not None:
+                    import torch
+                    with torch.no_grad():
+                        t_in = torch.from_numpy(audio_feats)
+                        out = self.audio_pytorch_model(t_in)
+                        raw_spoof_logit = float(out[0, 0])
+                else:
+                    out = self.sessions["wavlm_head"].run(["spoof_logit"], {"audio_features": audio_feats})[0]
+                    raw_spoof_logit = float(out[0, 0])
 
                 audio_std = float(np.std(audio_pcm)) if len(audio_pcm) > 0 else 0.0
                 if audio_std < 50.0 or raw_spoof_logit <= 0.0:

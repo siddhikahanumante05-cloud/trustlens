@@ -1,4 +1,5 @@
 """FastAPI main entrypoint for TrustLens backend."""
+import os
 import shutil
 import logging
 import json
@@ -65,6 +66,12 @@ async def lifespan(app: FastAPI):
                 )
     except Exception:
         logger.info("Local Ollama not reachable at %s. Defaulting to template narrator.", settings.OLLAMA_URL)
+
+    # Check neural model files presence without blocking event loop
+    models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models"))
+    has_video = os.path.exists(os.path.join(models_dir, "edgenet.pt")) or os.path.exists(os.path.join(models_dir, "edgenet_int8.onnx"))
+    has_audio = os.path.exists(os.path.join(models_dir, "wavlm_head.pt")) or os.path.exists(os.path.join(models_dir, "wavlm_head_int8.onnx"))
+    runtime_state["stubs_in_use"] = not (has_video and has_audio)
 
     yield
     logger.info("Shutting down TrustLens backend.")
